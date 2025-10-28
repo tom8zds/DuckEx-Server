@@ -12,6 +12,7 @@ import (
 
 	"duckex-server/internal/handlers"
 	"duckex-server/internal/models"
+	"duckex-server/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,8 @@ func setupTestRouter() (*gin.Engine, models.ItemRepository) {
 
 	// 创建仓库和处理器
 	itemRepo := models.NewInMemoryItemRepository()
-	itemHandler := handlers.NewItemHandler(itemRepo)
+	monitor := utils.NewMemoryMonitor(500)
+	itemHandler := handlers.NewItemHandler(itemRepo, monitor)
 
 	// 创建路由
 	r := gin.Default()
@@ -81,8 +83,8 @@ func TestShareItemInvalidRequest(t *testing.T) {
 
 	// 准备无效的请求数据（缺少必要字段）
 	requestData := map[string]interface{}{
-		"name":        "Test Item",
-		"sharer_id":   "player123",
+		"name":      "Test Item",
+		"sharer_id": "player123",
 		// 缺少 type_id, num, durability
 	}
 
@@ -113,7 +115,7 @@ func TestConcurrentShareItemRequests(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			
+
 			// 准备请求数据
 			requestData := handlers.ShareItemRequest{
 				Name:        fmt.Sprintf("Concurrent Weapon %d", index),
@@ -146,7 +148,7 @@ func TestConcurrentShareItemRequests(t *testing.T) {
 
 	// 等待所有请求完成
 	wg.Wait()
-	
+
 	// 验证至少有18个请求成功（考虑到可能有一些并发问题）
 	assert.GreaterOrEqual(t, successCount, int32(18))
 	wgSuccess.Done()
@@ -155,7 +157,7 @@ func TestConcurrentShareItemRequests(t *testing.T) {
 func TestConcurrentClaimItemRequests(t *testing.T) {
 	router, itemRepo := setupTestRouter()
 	var wg sync.WaitGroup
-	
+
 	// 首先创建一个物品用于测试
 	pickupCode := "TEST123"
 	item := &models.Item{
@@ -172,17 +174,17 @@ func TestConcurrentClaimItemRequests(t *testing.T) {
 		IsClaimed:   false,
 	}
 	itemRepo.Create(item)
-	
+
 	// 跟踪成功领取的请求数
 	var claimedSuccessfully sync.Once
 	var claimSuccessCount int
-	
+
 	// 启动10个并发请求尝试领取同一个物品
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			
+
 			// 准备请求数据
 			requestData := handlers.ClaimItemRequest{
 				PickupCode: pickupCode,
@@ -213,10 +215,10 @@ func TestConcurrentClaimItemRequests(t *testing.T) {
 
 	// 等待所有请求完成
 	wg.Wait()
-	
+
 	// 验证只有一个请求成功领取了物品
 	assert.Equal(t, 1, claimSuccessCount)
-	
+
 	// 验证物品现在已被标记为已领取
 	claimedItem, _ := itemRepo.GetByPickupCode(pickupCode)
 	assert.True(t, claimedItem.IsClaimed)
@@ -265,8 +267,8 @@ func TestClaimItem(t *testing.T) {
 
 	// 解析响应
 	type claimResponse struct {
-		Message string       `json:"message"`
-		Item    models.Item  `json:"item"`
+		Message string      `json:"message"`
+		Item    models.Item `json:"item"`
 	}
 	var response claimResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
