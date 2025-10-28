@@ -1,0 +1,78 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }} for ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        arch:
+          - {goarch: amd64, name: x86_64}
+          - {goarch: arm64, name: arm64}
+        exclude:
+          # Skip arm64 on Windows for now as it may require additional setup
+          - os: windows-latest
+            arch:
+              goarch: arm64
+              name: arm64
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        check-latest: true
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Run tests
+      run: go test ./... -v
+
+    - name: Build
+      run: |
+        GOARCH=${{ matrix.arch.goarch }}
+        OUTPUT_NAME="duckex-server-${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}-${{ matrix.arch.name }}"
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          OUTPUT_NAME="$OUTPUT_NAME.exe"
+        fi
+        go build -o "$OUTPUT_NAME" ./cmd/api
+      shell: bash
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: duckex-server-${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}-${{ matrix.arch.name }}
+        path: duckex-server-*
+
+  release:
+    needs: build
+    name: Create Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: write
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: Release v${{ github.run_number }}
+        draft: false
+        prerelease: false
+        files: artifacts/*/*
