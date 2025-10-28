@@ -12,13 +12,15 @@ import (
 
 // ItemHandler 物品处理器
 type ItemHandler struct {
-	itemRepo models.ItemRepository
+	itemRepo       models.ItemRepository
+	memoryMonitor  *utils.MemoryMonitor
 }
 
 // NewItemHandler 创建新的物品处理器
-func NewItemHandler(itemRepo models.ItemRepository) *ItemHandler {
+func NewItemHandler(itemRepo models.ItemRepository, memoryMonitor *utils.MemoryMonitor) *ItemHandler {
 	return &ItemHandler{
-		itemRepo: itemRepo,
+		itemRepo:      itemRepo,
+		memoryMonitor: memoryMonitor,
 	}
 }
 
@@ -52,6 +54,18 @@ type ErrorResponse struct {
 
 // ShareItem 分享物品
 func (h *ItemHandler) ShareItem(c *gin.Context) {
+	// 检查内存使用情况，如果内存占用过高，暂停存放接口响应
+	if h.memoryMonitor != nil {
+		h.memoryMonitor.UpdateStatus()
+		if h.memoryMonitor.IsShareDisabled() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "Storage temporarily disabled due to high memory usage. Please try again later.",
+				"memory_status": h.memoryMonitor.GetStatus(),
+			})
+			return
+		}
+	}
+	
 	var req ShareItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
