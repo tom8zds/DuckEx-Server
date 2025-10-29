@@ -62,10 +62,15 @@ func main() {
 
 	// 健康检查端点
 	r.GET("/health", func(c *gin.Context) {
+		// GetAll()方法现在只会返回未过期的物品
+		pendingItems := itemRepo.GetAll()
+		
 		c.JSON(http.StatusOK, gin.H{
-			"status":    "ok",
-			"message":   "DuckEx Server is quacking!",
-			"timestamp": models.GetCurrentTime().Format(time.RFC3339),
+			"status":          "ok",
+			"message":         "DuckEx Server is quacking!",
+			"timestamp":       models.GetCurrentTime().Format(time.RFC3339),
+			"pending_items_count": len(pendingItems),
+			"pending_items":   pendingItems,
 		})
 	})
 
@@ -82,15 +87,16 @@ func main() {
 		})
 	}
 
-	// 启动定期清理过期物品的goroutine
+	// 启动定期清理任务（作为额外保障，主要清理仍可能存在的过期物品）
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
+				log.Printf("Running scheduled cleanup task")
 				if err := itemRepo.DeleteExpired(); err != nil {
-					log.Printf("Error deleting expired items: %v", err)
+					log.Printf("Error during scheduled cleanup: %v", err)
 				}
 			}
 		}
