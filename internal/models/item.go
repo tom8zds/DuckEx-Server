@@ -42,6 +42,7 @@ type ItemRepository interface {
 	Create(item *Item) error
 	GetByPickupCode(pickupCode string) (*Item, error)
 	Update(item *Item) error
+	Delete(pickupCode string) error
 	DeleteExpired() error
 	GetAll() []*Item
 }
@@ -70,11 +71,26 @@ func (r *InMemoryItemRepository) Create(item *Item) error {
 // GetByPickupCode 通过取件码获取物品
 func (r *InMemoryItemRepository) GetByPickupCode(pickupCode string) (*Item, error) {
 	r.mutex.RLock()
-	defer r.mutex.RUnlock()
 	item, exists := r.items[pickupCode]
 	if !exists {
+		r.mutex.RUnlock()
 		return nil, nil
 	}
+	
+	// 检查物品是否过期
+	if GetCurrentTime().After(item.ExpiresAt) {
+		// 解锁读锁，获取写锁删除过期物品
+		r.mutex.RUnlock()
+		r.mutex.Lock()
+		// 再次检查物品是否存在（防止并发删除）
+		if _, stillExists := r.items[pickupCode]; stillExists {
+			delete(r.items, pickupCode)
+		}
+		r.mutex.Unlock()
+		return nil, nil
+	}
+	
+	r.mutex.RUnlock()
 	return item, nil
 }
 
@@ -99,13 +115,24 @@ func (r *InMemoryItemRepository) DeleteExpired() error {
 	return nil
 }
 
+// Delete 删除物品
+func (r *InMemoryItemRepository) Delete(pickupCode string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	delete(r.items, pickupCode)
+	return nil
+}
+
 // GetAll 获取所有物品（主要用于测试）
 func (r *InMemoryItemRepository) GetAll() []*Item {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	items := make([]*Item, 0, len(r.items))
 	for _, item := range r.items {
-		items = append(items, item)
+		// 只返回未过期的物品
+		if !GetCurrentTime().After(item.ExpiresAt) {
+			items = append(items, item)
+		}
 	}
 	return items
 }

@@ -52,6 +52,13 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// 领取物品的响应结构
+type ClaimItemResponse struct {
+	Code    int          `json:"code"`
+	Message string       `json:"message"`
+	Item    *models.Item `json:"item,omitempty"`
+}
+
 // ShareItem 分享物品
 func (h *ItemHandler) ShareItem(c *gin.Context) {
 	// 检查内存使用情况，如果内存占用过高，暂停存放接口响应
@@ -112,8 +119,9 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 func (h *ItemHandler) ClaimItem(c *gin.Context) {
 	var req ClaimItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: "Invalid request format: " + err.Error(),
+		c.JSON(http.StatusBadRequest, ClaimItemResponse{
+			Code:    400,
+			Message: "请求格式无效: " + err.Error(),
 		})
 		return
 	}
@@ -121,49 +129,57 @@ func (h *ItemHandler) ClaimItem(c *gin.Context) {
 	// 根据取件码查找物品
 	item, err := h.itemRepo.GetByPickupCode(req.PickupCode)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: "Failed to claim item: " + err.Error(),
+		c.JSON(http.StatusOK, ClaimItemResponse{
+			Code:    500,
+			Message: "领取物品失败: " + err.Error(),
 		})
 		return
 	}
 
 	if item == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error: "Item not found with this pickup code",
+		c.JSON(http.StatusOK, ClaimItemResponse{
+			Code:    404,
+			Message: "提取码无效",
 		})
 		return
 	}
 
 	// 检查物品是否已被领取
 	if item.IsClaimed {
-		c.JSON(http.StatusConflict, ErrorResponse{
-			Error: "Item has already been claimed",
+		c.JSON(http.StatusOK, ClaimItemResponse{
+			Code:    409,
+			Message: "该物品已被领取",
 		})
 		return
 	}
 
 	// 检查物品是否过期
 	if models.GetCurrentTime().After(item.ExpiresAt) {
-		c.JSON(http.StatusGone, ErrorResponse{
-			Error: "Item has expired",
+		c.JSON(http.StatusOK, ClaimItemResponse{
+			Code:    410,
+			Message: "该物品已过期",
 		})
 		return
 	}
 
-	// 标记物品为已领取
-	item.IsClaimed = true
-	item.ClaimerID = req.ClaimerID
+	// 保存物品信息用于响应
+	claimedItem := *item
+	claimedItem.IsClaimed = true
+	claimedItem.ClaimerID = req.ClaimerID
 
-	// 更新物品信息
-	if err := h.itemRepo.Update(item); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: "Failed to update item: " + err.Error(),
+	// 物品被领取后立即删除
+	if err := h.itemRepo.Delete(item.PickupCode); err != nil {
+		c.JSON(http.StatusInternalServerError, ClaimItemResponse{
+			Code:    500,
+			Message: "删除物品失败: " + err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Item claimed successfully! Quack!",
-		"item":    item,
+	claimedItemPtr := claimedItem
+	c.JSON(http.StatusOK, ClaimItemResponse{
+		Code:    200,
+		Message: "物品领取成功！呱呱！",
+		Item:    &claimedItemPtr,
 	})
 }

@@ -114,6 +114,23 @@ go run cmd/api/main.go
   }
   ```
 
+### 内存状态
+- **URL**: `/api/v1/memory`
+- **Method**: `GET`
+- **Response**:
+  ```json
+  {
+    "current_usage_mb": 128,
+    "max_memory_mb": 1024,
+    "usage_percentage": 0.125,
+    "share_disabled": false
+  }
+  ```
+  - `current_usage_mb`: 当前内存使用量(MB)
+  - `max_memory_mb`: 最大允许内存使用量(MB)
+  - `usage_percentage`: 内存使用百分比
+  - `share_disabled`: 分享功能是否被禁用(当内存使用超过阈值时为true)
+
 ## 错误处理
 所有API响应都包含适当的HTTP状态码：
 - `400 Bad Request`: 请求格式错误
@@ -121,6 +138,7 @@ go run cmd/api/main.go
 - `409 Conflict`: 物品已被领取
 - `410 Gone`: 物品已过期
 - `500 Internal Server Error`: 服务器内部错误
+- `503 Service Unavailable`: 内存使用过高，分享功能暂时禁用
 
 ## 扩展建议
 1. 添加持久化存储（如MySQL、PostgreSQL）
