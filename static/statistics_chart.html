@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>物品数量统计图表</title>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<style>
+		body {
+				font-family: Arial, sans-serif;
+				margin: 0;
+				padding: 20px;
+				background-color: #f5f5f5;
+			}
+			.health-info {
+				background-color: #f0f8ff;
+				border: 1px solid #ddd;
+				border-radius: 8px;
+				padding: 15px;
+				margin-bottom: 20px;
+			}
+			.health-info h2 {
+				margin-top: 0;
+				color: #333;
+				font-size: 18px;
+			}
+			.health-stats {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 20px;
+			}
+			.stat-item {
+				display: flex;
+				flex-direction: column;
+				min-width: 150px;
+			}
+			.stat-label {
+				font-size: 12px;
+				color: #666;
+				margin-bottom: 5px;
+			}
+			.stat-value {
+				font-size: 16px;
+				font-weight: bold;
+				color: #333;
+			}
+		.container {
+			max-width: 1200px;
+			margin: 0 auto;
+			background-color: white;
+			padding: 20px;
+			border-radius: 8px;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+		}
+		h1 {
+			color: #333;
+			text-align: center;
+		}
+		.chart-container {
+			position: relative;
+			height: 400px;
+			margin-top: 20px;
+		}
+		.refresh-btn {
+			background-color: #4CAF50;
+			color: white;
+			border: none;
+			padding: 10px 20px;
+			text-align: center;
+			text-decoration: none;
+			display: inline-block;
+			font-size: 16px;
+			margin: 10px 0;
+			cursor: pointer;
+			border-radius: 4px;
+		}
+		.refresh-btn:hover {
+			background-color: #45a049;
+		}
+		.loading {
+			text-align: center;
+			padding: 20px;
+			color: #666;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>物品数量统计柱状图</h1>
+			
+			<!-- 健康状态信息区域 -->
+			<div class="health-info">
+				<h2>服务健康状态</h2>
+				<div class="health-stats">
+					<div class="stat-item">
+						<span class="stat-label">服务状态:</span>
+						<span id="health-status" class="stat-value">加载中...</span>
+					</div>
+					<div class="stat-item">
+						<span class="stat-label">总物品数:</span>
+						<span id="total-items" class="stat-value">加载中...</span>
+					</div>
+					<div class="stat-item">
+						<span class="stat-label">小时内处理:</span>
+						<span id="hourly-processed" class="stat-value">加载中...</span>
+					</div>
+					<div class="stat-item">
+						<span class="stat-label">内存使用:</span>
+						<span id="memory-usage" class="stat-value">加载中...</span>
+					</div>
+					<div class="stat-item">
+						<span class="stat-label">更新时间:</span>
+						<span id="update-time" class="stat-value">加载中...</span>
+					</div>
+				</div>
+			</div>
+			
+			<button class="refresh-btn" onclick="loadChartData()">刷新数据</button>
+			<div class="loading" id="loading">加载数据中...</div>
+			<div class="chart-container">
+				<canvas id="statisticsChart"></canvas>
+			</div>
+	</div>
+	
+	<script>
+		let myChart;
+		
+		// 加载图表数据
+		function loadChartData() {
+			document.getElementById('loading').style.display = 'block';
+			
+			// 同时更新健康数据
+			displayHealthData();
+			
+			fetch('/api/v1/statistics/items')
+				.then(response => response.json())
+				.then(data => {
+					document.getElementById('loading').style.display = 'none';
+					if (data.status === 'ok') {
+						updateChart(data.timestamps, data.counts);
+					} else {
+						alert('加载数据失败: ' + data.message);
+					}
+				})
+				.catch(error => {
+					document.getElementById('loading').style.display = 'none';
+					console.error('Error fetching data:', error);
+					alert('加载数据时发生错误');
+				});
+		}
+		
+		// 更新图表
+		function updateChart(timestamps, counts) {
+			// 格式化时间戳为更友好的格式
+			const formattedLabels = timestamps.map(ts => {
+				const date = new Date(ts);
+				return `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+			});
+			
+			const ctx = document.getElementById('statisticsChart').getContext('2d');
+			
+			// 销毁旧图表
+			if (myChart) {
+				myChart.destroy();
+			}
+			
+			// 创建新图表 - 柱状图
+			myChart = new Chart(ctx, {
+				type: 'bar',
+				data: {
+					labels: formattedLabels,
+					datasets: [{
+						label: '物品数量',
+						data: counts,
+						backgroundColor: 'rgba(54, 162, 235, 0.6)',
+						borderColor: 'rgb(54, 162, 235)',
+						borderWidth: 1
+					}]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					plugins: {
+						legend: {
+							position: 'top',
+						},
+						title: {
+							display: true,
+							text: '物品数量变化趋势（每5分钟统计）'
+						},
+						hover: {
+							mode: 'index',
+							intersect: false
+						}
+					},
+					scales: {
+						y: {
+							beginAtZero: true,
+							ticks: {
+								stepSize: 1
+							}
+						}
+					}
+				}
+			});
+		}
+		
+		// 页面加载时显示健康数据并初始化图表
+			window.onload = function() {
+				// 显示健康数据
+				displayHealthData();
+				// 初始化图表
+				loadChartData();
+			};
+			
+			// 显示健康检查数据
+			function displayHealthData() {
+				// 如果window.healthData不存在，尝试从URL参数或直接请求获取
+				if (window.healthData) {
+					const data = window.healthData;
+					document.getElementById('health-status').textContent = data.status === 'ok' ? '✅ 正常运行' : '❌ 异常';
+					document.getElementById('total-items').textContent = data.statistics.total_items;
+					document.getElementById('hourly-processed').textContent = data.statistics.hourly_processed_items;
+					document.getElementById('memory-usage').textContent = 
+						data.statistics.memory_usage.current_mb + 'MB (' + 
+						data.statistics.memory_usage.percentage + ')';
+					document.getElementById('update-time').textContent = 
+						new Date(data.timestamp).toLocaleString('zh-CN');
+				} else {
+					// 如果没有嵌入数据，则直接从health接口获取
+					fetch('/health')
+						.then(response => response.json())
+						.then(data => {
+							document.getElementById('health-status').textContent = data.status === 'ok' ? '✅ 正常运行' : '❌ 异常';
+							document.getElementById('total-items').textContent = data.statistics.total_items;
+							document.getElementById('hourly-processed').textContent = data.statistics.hourly_processed_items;
+							document.getElementById('memory-usage').textContent = 
+								data.statistics.memory_usage.current_mb + 'MB (' + 
+								data.statistics.memory_usage.percentage + ')';
+							document.getElementById('update-time').textContent = 
+								new Date(data.timestamp).toLocaleString('zh-CN');
+						})
+						.catch(error => {
+							console.error('Error fetching health data:', error);
+							document.getElementById('health-status').textContent = '❌ 无法获取';
+							document.getElementById('total-items').textContent = '无法获取';
+							document.getElementById('hourly-processed').textContent = '无法获取';
+							document.getElementById('memory-usage').textContent = '无法获取';
+							document.getElementById('update-time').textContent = '无法获取';
+						});
+				}
+			}
+	</script>
+</body>
+</html>

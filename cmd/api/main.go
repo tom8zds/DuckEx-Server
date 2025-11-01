@@ -1,9 +1,18 @@
 package main
 
 import (
+	"context"
+	"encoding/csv"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"duckex-server/internal/handlers"
@@ -23,10 +32,79 @@ func getSystemMemoryMB() int64 {
 	return 4096 // 默认假设4GB内存
 }
 
+const (
+	// 默认PID文件路径
+	defaultPIDFile = "./duckex-server.pid"
+)
+
+// 保存PID到文件
+func savePID(pidFile string) error {
+	pid := os.Getpid()
+	file, err := os.Create(pidFile)
+	if err != nil {
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = fmt.Fprintf(file, "%d", pid)
+	if err != nil {
+		return fmt.Errorf("failed to write PID to file: %w", err)
+	}
+
+	log.Printf("PID %d saved to %s", pid, pidFile)
+	return nil
+}
+
+// 删除PID文件
+func removePID(pidFile string) {
+	if err := os.Remove(pidFile); err != nil {
+		log.Printf("Warning: failed to remove PID file %s: %v", pidFile, err)
+	} else {
+		log.Printf("PID file %s removed", pidFile)
+	}
+}
+
 func main() {
 	// 初始化仓库
 	itemRepo := models.NewInMemoryItemRepository()
-	
+
+	// 保存PID文件
+	pidFile := defaultPIDFile
+	if err := savePID(pidFile); err != nil {
+		log.Fatalf("Failed to save PID file: %v", err)
+	}
+
+	// 确保程序退出时保存数据并删除PID文件
+	defer func() {
+		// 先删除PID文件
+		removePID(pidFile)
+
+		// 再关闭仓库
+		if err := itemRepo.Shutdown(); err != nil {
+			log.Printf("Error during repository shutdown: %v", err)
+		} else {
+			log.Println("Repository shutdown completed successfully")
+		}
+	}()
+
+	// 后台运行模式 - 关闭标准输入输出
+	// 重定向标准输出和标准错误到日志文件
+	logFile, err := os.OpenFile("./duckex-server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Printf("Warning: failed to open log file: %v, continuing with default logging", err)
+	} else {
+		defer logFile.Close()
+		log.SetOutput(logFile)
+
+		// 关闭标准输入
+		os.Stdin.Close()
+		// 重定向标准输出和标准错误到日志文件
+		os.Stdout = logFile
+		os.Stderr = logFile
+	}
+
+	log.Println("DuckEx Server started in background mode")
+
 	// 初始化内存监控器，默认设置为可用内存的80%
 	// 设置最大内存为系统内存的80%，如果无法获取则设置为1GB
 	maxMemoryMB := int64(1024) // 默认1GB
@@ -62,15 +140,34 @@ func main() {
 
 	// 健康检查端点
 	r.GET("/health", func(c *gin.Context) {
-		// GetAll()方法现在只会返回未过期的物品
-		pendingItems := itemRepo.GetAll()
-		
+		// 获取当前时间和1小时前的时间
+		now := models.GetCurrentTime()
+		hourAgo := now.Add(-1 * time.Hour)
+
+		// 获取物品总数（包括已过期和已领取的）
+		totalItemsCount := itemRepo.GetTotalCount()
+
+		// 获取1小时内处理的物品数量（分享和领取）
+		hourlyProcessedCount := itemRepo.GetProcessedCountInTimeRange(hourAgo, now)
+
+		// 获取内存状态
+		memoryStatus := memoryMonitor.GetStatus()
+		memoryUsageMB := memoryStatus["current_usage_mb"].(int64)
+		memoryUsagePercent := memoryStatus["usage_percentage"].(float64) * 100
+
 		c.JSON(http.StatusOK, gin.H{
-			"status":          "ok",
-			"message":         "DuckEx Server is quacking!",
-			"timestamp":       models.GetCurrentTime().Format(time.RFC3339),
-			"pending_items_count": len(pendingItems),
-			"pending_items":   pendingItems,
+			"status":    "ok",
+			"message":   "DuckEx Server is quacking!",
+			"timestamp": now.Format(time.RFC3339),
+			"statistics": gin.H{
+				"total_items":            totalItemsCount,
+				"hourly_processed_items": hourlyProcessedCount,
+				"memory_usage": gin.H{
+					"current_mb":     memoryUsageMB,
+					"percentage":     fmt.Sprintf("%.1f%%", memoryUsagePercent),
+					"max_allowed_mb": memoryStatus["max_memory_mb"].(int64),
+				},
+			},
 		})
 	})
 
@@ -84,6 +181,83 @@ func main() {
 		// 内存状态
 		api.GET("/memory", func(c *gin.Context) {
 			c.JSON(http.StatusOK, memoryMonitor.GetStatus())
+		})
+
+		// 获取物品数量统计数据（用于折线图）
+		api.GET("/statistics/items", func(c *gin.Context) {
+			csvFile := "./item_statistics.csv"
+
+			// 检查文件是否存在
+			if _, err := os.Stat(csvFile); os.IsNotExist(err) {
+				c.JSON(http.StatusNotFound, gin.H{
+					"status":  "error",
+					"message": "Statistics file not found",
+				})
+				return
+			}
+
+			// 打开CSV文件
+			file, err := os.Open(csvFile)
+			if err != nil {
+				log.Printf("Error opening statistics file: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": "Failed to open statistics file",
+				})
+				return
+			}
+			defer file.Close()
+
+			// 读取CSV数据
+			reader := csv.NewReader(file)
+
+			// 跳过表头
+			_, err = reader.Read()
+			if err != nil {
+				log.Printf("Error reading CSV header: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": "Failed to read statistics data",
+				})
+				return
+			}
+
+			// 解析数据
+			var timestamps []string
+			var counts []int
+
+			for {
+				record, err := reader.Read()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Printf("Error reading CSV record: %v", err)
+					continue
+				}
+
+				if len(record) >= 2 {
+					timestamps = append(timestamps, record[0])
+					count, err := strconv.Atoi(record[1])
+					if err != nil {
+						log.Printf("Error parsing count value: %v", err)
+						count = 0
+					}
+					counts = append(counts, count)
+				}
+			}
+
+			// 只返回最后1000条数据
+			if len(timestamps) > 100 {
+				timestamps = timestamps[len(timestamps)-100:]
+				counts = counts[len(counts)-100:]
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"status":     "ok",
+				"timestamps": timestamps,
+				"counts":     counts,
+			})
 		})
 	}
 
@@ -101,7 +275,59 @@ func main() {
 			}
 		}
 	}()
-	
+
+	// 启动每5分钟统计物品数量并写入CSV的任务
+	go func() {
+		csvFile := "./item_statistics.csv"
+		// 检查文件是否存在，如果不存在则创建并写入表头
+		if _, err := os.Stat(csvFile); os.IsNotExist(err) {
+			file, err := os.Create(csvFile)
+			if err != nil {
+				log.Printf("Error creating CSV file: %v", err)
+				return
+			}
+			// 写入CSV表头
+			_, err = file.WriteString("timestamp,item_count\n")
+			if err != nil {
+				log.Printf("Error writing CSV header: %v", err)
+			}
+			file.Close()
+			log.Printf("Created new statistics CSV file: %s", csvFile)
+		}
+
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		log.Printf("Started item statistics collection, will save to %s every 5 minutes", csvFile)
+
+		for {
+			select {
+			case <-ticker.C:
+				// 获取当前时间和物品总数
+				now := models.GetCurrentTime()
+				totalItemsCount := itemRepo.GetTotalCount()
+
+				// 打开文件以追加模式
+				file, err := os.OpenFile(csvFile, os.O_APPEND|os.O_WRONLY, 0644)
+				if err != nil {
+					log.Printf("Error opening CSV file for appending: %v", err)
+					continue
+				}
+
+				// 写入统计数据
+				csvLine := fmt.Sprintf("%s,%d\n", now.Format(time.RFC3339), totalItemsCount)
+				_, err = file.WriteString(csvLine)
+				file.Close()
+
+				if err != nil {
+					log.Printf("Error writing to CSV file: %v", err)
+				} else {
+					log.Printf("Saved item statistics to CSV: timestamp=%s, count=%d", now.Format(time.RFC3339), totalItemsCount)
+				}
+			}
+		}
+	}()
+
 	// 启动内存监控goroutine
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -112,10 +338,10 @@ func main() {
 				memoryMonitor.UpdateStatus()
 				status := memoryMonitor.GetStatus()
 				if status["share_disabled"].(bool) {
-					log.Printf("WARNING: Memory usage high (%.1f%%), share functionality temporarily disabled", 
+					log.Printf("WARNING: Memory usage high (%.1f%%), share functionality temporarily disabled",
 						status["usage_percentage"].(float64)*100)
 				} else {
-					log.Printf("Memory usage: %.1f%% of %d MB", 
+					log.Printf("Memory usage: %.1f%% of %d MB",
 						status["usage_percentage"].(float64)*100,
 						status["max_memory_mb"].(int64))
 				}
@@ -123,16 +349,125 @@ func main() {
 		}
 	}()
 
+	// 配置静态文件服务
+	r.Static("/static", "./static")
+
+	// 添加根路径路由，直接返回统计图表HTML内容
+	r.GET("/", func(c *gin.Context) {
+		// 获取健康检查数据
+		now := models.GetCurrentTime()
+		hourAgo := now.Add(-1 * time.Hour)
+		totalItemsCount := itemRepo.GetTotalCount()
+		hourlyProcessedCount := itemRepo.GetProcessedCountInTimeRange(hourAgo, now)
+		memoryStatus := memoryMonitor.GetStatus()
+		memoryUsageMB := memoryStatus["current_usage_mb"].(int64)
+		memoryUsagePercent := memoryStatus["usage_percentage"].(float64) * 100
+		maxMemoryMB := memoryStatus["max_memory_mb"].(int64)
+		
+		// 读取HTML文件内容
+		htmlContent, err := os.ReadFile("./static/statistics_chart.html")
+		if err != nil {
+			log.Printf("Error reading HTML file: %v", err)
+			c.String(http.StatusInternalServerError, "Error loading page")
+			return
+		}
+		
+		// 在HTML头部添加健康数据脚本
+		healthDataScript := fmt.Sprintf(`
+		<script>
+			// 健康检查数据
+			window.healthData = {
+				status: "ok",
+				message: "DuckEx Server is quacking!",
+				timestamp: "%s",
+				statistics: {
+					total_items: %d,
+					hourly_processed_items: %d,
+					memory_usage: {
+						current_mb: %d,
+						percentage: "%.1f%%",
+						max_allowed_mb: %d
+					}
+				}
+			};
+		</script>
+		`, now.Format(time.RFC3339), totalItemsCount, hourlyProcessedCount, memoryUsageMB, memoryUsagePercent, maxMemoryMB)
+		
+		// 在head标签后插入健康数据脚本
+		htmlStr := string(htmlContent)
+		headEndIndex := strings.Index(htmlStr, "</head>")
+		if headEndIndex > 0 {
+			htmlStr = htmlStr[:headEndIndex] + healthDataScript + htmlStr[headEndIndex:]
+		}
+		
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, htmlStr)
+	})
+
+	// 保留原有统计图表页面路由，重定向到根路径
+	r.GET("/statistics/chart", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/")
+	})
+
 	// 启动服务器
 	serverAddr := ":8080"
 	log.Printf("DuckEx Server starting on %s", serverAddr)
 	log.Printf("Health check: http://localhost%s/health", serverAddr)
+	log.Printf("Statistics chart: http://localhost%s/statistics/chart", serverAddr)
 	log.Printf("API endpoints:")
 	log.Printf("  POST http://localhost%s/api/v1/items/share - Share an item", serverAddr)
 	log.Printf("  POST http://localhost%s/api/v1/items/claim - Claim an item", serverAddr)
 	log.Printf("  GET  http://localhost%s/api/v1/memory - Check memory status", serverAddr)
+	log.Printf("  GET  http://localhost%s/api/v1/statistics/items - Get item statistics data", serverAddr)
+	log.Printf("Data will be saved every 5 minutes and on graceful shutdown")
 
-	if err := r.Run(serverAddr); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	// 创建HTTP服务器
+	srv := &http.Server{
+		Addr:    serverAddr,
+		Handler: r,
 	}
+
+	// 启动服务器（非阻塞）
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// 等待中断信号以优雅地关闭服务器
+	quit := make(chan os.Signal, 1)
+
+	// 支持Windows和Unix/Linux的终止信号
+	// kill (no param) default send syscall.SIGTERM
+	// kill -2 is syscall.SIGINT
+	signalsToHandle := []os.Signal{syscall.SIGINT}
+
+	// 在不同操作系统上添加适当的终止信号
+	// Windows上可能不支持SIGTERM，但Go的signal包会尝试处理
+	signalsToHandle = append(signalsToHandle, syscall.SIGTERM)
+
+	// 在Windows上，添加Windows特定的信号处理
+	if runtime.GOOS == "windows" {
+		log.Println("Windows detected, registering appropriate signal handlers")
+		// 在Windows上，kill命令通常通过任务管理器或taskkill发送终止信号
+		// Go的signal包会将这些信号映射到SIGINT或SIGTERM
+	} else {
+		log.Println("Unix/Linux detected, registering standard signal handlers")
+	}
+
+	// 注册信号处理
+	signal.Notify(quit, signalsToHandle...)
+	log.Println("Signal handlers registered for graceful shutdown")
+	log.Println("Note: On Windows, use taskkill /pid <pid> /f to force kill or omit /f for graceful shutdown")
+	<-quit
+	log.Println("Shutting down server...")
+
+	// 设置5秒的超时时间来关闭服务器
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exiting")
 }

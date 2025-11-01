@@ -137,9 +137,8 @@ func (h *ItemHandler) ClaimItem(c *gin.Context) {
 	}
 
 	if item == nil {
-		c.JSON(http.StatusOK, ClaimItemResponse{
-			Code:    404,
-			Message: "提取码无效",
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error: "Item not found with this pickup code",
 		})
 		return
 	}
@@ -162,24 +161,20 @@ func (h *ItemHandler) ClaimItem(c *gin.Context) {
 		return
 	}
 
-	// 保存物品信息用于响应
-	claimedItem := *item
-	claimedItem.IsClaimed = true
-	claimedItem.ClaimerID = req.ClaimerID
-
-	// 物品被领取后立即删除
-	if err := h.itemRepo.Delete(item.PickupCode); err != nil {
+	// 更新物品状态为已领取
+	item.IsClaimed = true
+	item.ClaimerID = req.ClaimerID
+	if err := h.itemRepo.Update(item); err != nil {
 		c.JSON(http.StatusInternalServerError, ClaimItemResponse{
 			Code:    500,
-			Message: "删除物品失败: " + err.Error(),
+			Message: "更新物品状态失败: " + err.Error(),
 		})
 		return
 	}
 
-	claimedItemPtr := claimedItem
 	c.JSON(http.StatusOK, ClaimItemResponse{
 		Code:    200,
-		Message: "物品领取成功！呱呱！",
-		Item:    &claimedItemPtr,
+		Message: "Item claimed successfully! Quack!",
+		Item:    item,
 	})
 }
