@@ -27,18 +27,19 @@ func init() {
 
 // Item 物品模型
 type Item struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	TypeID      int       `json:"type_id"`
-	Num         int       `json:"num"`
-	Durability  float64   `json:"durability"`
-	SharerID    string    `json:"sharer_id"`
-	PickupCode  string    `json:"pickup_code"`
-	CreatedAt   time.Time `json:"created_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	IsClaimed   bool      `json:"is_claimed"`
-	ClaimerID   string    `json:"claimer_id"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	TypeID         int       `json:"type_id"`
+	Num            int       `json:"num"`
+	Durability     float64   `json:"durability"`
+	DurabilityLoss float64   `json:"durability_loss"`
+	SharerID       string    `json:"sharer_id"`
+	PickupCode     string    `json:"pickup_code"`
+	CreatedAt      time.Time `json:"created_at"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	IsClaimed      bool      `json:"is_claimed"`
+	ClaimerID      string    `json:"claimer_id"`
 }
 
 // ItemRepository 物品仓库接口

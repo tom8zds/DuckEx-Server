@@ -45,12 +45,13 @@ func TestShareItem(t *testing.T) {
 
 	// 准备请求数据
 	requestData := handlers.ShareItemRequest{
-		Name:        "Test Weapon",
-		Description: "A powerful sword",
-		TypeID:      1001,
-		Num:         1,
-		Durability:  90.0,
-		SharerID:    "player123",
+		Name:           "Test Weapon",
+		Description:    "A powerful sword",
+		TypeID:         1001,
+		Num:            1,
+		Durability:     90.0,
+		DurabilityLoss: 10.0,
+		SharerID:       "player123",
 	}
 
 	requestBody, err := json.Marshal(requestData)
@@ -118,12 +119,13 @@ func TestConcurrentShareItemRequests(t *testing.T) {
 
 			// 准备请求数据
 			requestData := handlers.ShareItemRequest{
-				Name:        fmt.Sprintf("Concurrent Weapon %d", index),
-				Description: "Concurrent test sword",
-				TypeID:      1001 + index,
-				Num:         1,
-				Durability:  90.0,
-				SharerID:    fmt.Sprintf("player%d", index),
+				Name:           fmt.Sprintf("Concurrent Weapon %d", index),
+				Description:    "Concurrent test sword",
+				TypeID:         1001 + index,
+				Num:            1,
+				Durability:     90.0,
+				DurabilityLoss: 5.0,
+				SharerID:       fmt.Sprintf("player%d", index),
 			}
 
 			requestBody, err := json.Marshal(requestData)
@@ -161,17 +163,18 @@ func TestConcurrentClaimItemRequests(t *testing.T) {
 	// 首先创建一个物品用于测试
 	pickupCode := "TEST123"
 	item := &models.Item{
-		ID:          "test-item-concurrent-claim",
-		Name:        "Claim Test Item",
-		Description: "Test concurrent claiming",
-		TypeID:      2000,
-		Num:         1,
-		Durability:  95.0,
-		SharerID:    "sharer123",
-		PickupCode:  pickupCode,
-		CreatedAt:   time.Now(),
-		ExpiresAt:   time.Now().Add(24 * time.Hour),
-		IsClaimed:   false,
+		ID:             "test-item-concurrent-claim",
+		Name:           "Claim Test Item",
+		Description:    "Test concurrent claiming",
+		TypeID:         2000,
+		Num:            1,
+		Durability:     95.0,
+		DurabilityLoss: 15.0,
+		SharerID:       "sharer123",
+		PickupCode:     pickupCode,
+		CreatedAt:      time.Now(),
+		ExpiresAt:      time.Now().Add(24 * time.Hour),
+		IsClaimed:      false,
 	}
 	itemRepo.Create(item)
 
@@ -231,17 +234,18 @@ func TestClaimItem(t *testing.T) {
 	// 先创建一个物品用于测试领取
 	pickupCode := "123456"
 	item := &models.Item{
-		ID:          "test-item-for-claim",
-		Name:        "Claimable Item",
-		Description: "This item is ready to be claimed",
-		TypeID:      2001,
-		Num:         1,
-		Durability:  85.5,
-		SharerID:    "player123",
-		PickupCode:  pickupCode,
-		CreatedAt:   models.GetCurrentTime(),
-		ExpiresAt:   models.GetExpirationTime(),
-		IsClaimed:   false,
+		ID:             "test-item-for-claim",
+		Name:           "Claimable Item",
+		Description:    "This item is ready to be claimed",
+		TypeID:         2001,
+		Num:            1,
+		Durability:     85.5,
+		DurabilityLoss: 10.5,
+		SharerID:       "player123",
+		PickupCode:     pickupCode,
+		CreatedAt:      models.GetCurrentTime(),
+		ExpiresAt:      models.GetExpirationTime(),
+		IsClaimed:      false,
 	}
 	itemRepo.Create(item)
 

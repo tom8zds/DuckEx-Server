@@ -71,9 +71,18 @@ go run cmd/api/main.go
     "type_id": 123,
     "num": 1,
     "durability": 95.5,
+    "durability_loss": 10.0,
     "sharer_id": "分享者ID"
   }
   ```
+- **参数说明**:
+  - `name`: 物品名称
+  - `description`: 物品描述
+  - `type_id`: 物品类型ID
+  - `num`: 物品数量
+  - `durability`: 物品耐久度
+  - `durability_loss`: 物品领取时的耐久度损失（可选，默认0，必须大于等于0）
+  - `sharer_id`: 分享者ID
 - **Response**:
   ```json
   {
@@ -104,6 +113,7 @@ go run cmd/api/main.go
       "type_id": 123,
       "num": 1,
       "durability": 95.5,
+      "durability_loss": 10.0,
       "sharer_id": "分享者ID",
       "pickup_code": "123456",
       "created_at": "2023-10-28T13:33:45Z",

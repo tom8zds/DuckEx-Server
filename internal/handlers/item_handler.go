@@ -12,8 +12,8 @@ import (
 
 // ItemHandler 物品处理器
 type ItemHandler struct {
-	itemRepo       models.ItemRepository
-	memoryMonitor  *utils.MemoryMonitor
+	itemRepo      models.ItemRepository
+	memoryMonitor *utils.MemoryMonitor
 }
 
 // NewItemHandler 创建新的物品处理器
@@ -26,12 +26,13 @@ func NewItemHandler(itemRepo models.ItemRepository, memoryMonitor *utils.MemoryM
 
 // 分享物品的请求结构
 type ShareItemRequest struct {
-	Name        string  `json:"name" binding:"required"`
-	Description string  `json:"description" binding:"required"`
-	TypeID      int     `json:"type_id" binding:"required"`
-	Num         int     `json:"num" binding:"required,min=1"`
-	Durability  float64 `json:"durability" binding:"required,min=0"`
-	SharerID    string  `json:"sharer_id" binding:"required"`
+	Name           string  `json:"name" binding:"required"`
+	Description    string  `json:"description" binding:"required"`
+	TypeID         int     `json:"type_id" binding:"required"`
+	Num            int     `json:"num" binding:"required,min=1"`
+	Durability     float64 `json:"durability" binding:"required,min=0"`
+	DurabilityLoss float64 `json:"durability_loss" binding:"omitempty,min=0"`
+	SharerID       string  `json:"sharer_id" binding:"required"`
 }
 
 // 分享物品的响应结构
@@ -66,13 +67,13 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 		h.memoryMonitor.UpdateStatus()
 		if h.memoryMonitor.IsShareDisabled() {
 			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error": "Storage temporarily disabled due to high memory usage. Please try again later.",
+				"error":         "Storage temporarily disabled due to high memory usage. Please try again later.",
 				"memory_status": h.memoryMonitor.GetStatus(),
 			})
 			return
 		}
 	}
-	
+
 	var req ShareItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -87,17 +88,18 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 
 	// 创建物品
 	item := &models.Item{
-		ID:          models.GetCurrentTime().Format("20060102150405") + req.SharerID,
-		Name:        req.Name,
-		Description: req.Description,
-		TypeID:      req.TypeID,
-		Num:         req.Num,
-		Durability:  req.Durability,
-		SharerID:    req.SharerID,
-		PickupCode:  pickupCode,
-		CreatedAt:   models.GetCurrentTime(),
-		ExpiresAt:   models.GetExpirationTime(),
-		IsClaimed:   false,
+		ID:             models.GetCurrentTime().Format("20060102150405") + req.SharerID,
+		Name:           req.Name,
+		Description:    req.Description,
+		TypeID:         req.TypeID,
+		Num:            req.Num,
+		Durability:     req.Durability,
+		DurabilityLoss: req.DurabilityLoss,
+		SharerID:       req.SharerID,
+		PickupCode:     pickupCode,
+		CreatedAt:      models.GetCurrentTime(),
+		ExpiresAt:      models.GetExpirationTime(),
+		IsClaimed:      false,
 	}
 
 	// 保存物品
@@ -164,6 +166,7 @@ func (h *ItemHandler) ClaimItem(c *gin.Context) {
 	// 更新物品状态为已领取
 	item.IsClaimed = true
 	item.ClaimerID = req.ClaimerID
+
 	if err := h.itemRepo.Update(item); err != nil {
 		c.JSON(http.StatusInternalServerError, ClaimItemResponse{
 			Code:    500,
