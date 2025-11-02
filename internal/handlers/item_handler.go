@@ -30,7 +30,7 @@ type ShareItemRequest struct {
 	Description    string  `json:"description" binding:"required"`
 	TypeID         int     `json:"type_id" binding:"required"`
 	Num            int     `json:"num" binding:"required,min=1"`
-	Durability     float64 `json:"durability" binding:"required,min=0"`
+	Durability     float64 `json:"durability" binding:"omitempty,min=0"`
 	DurabilityLoss float64 `json:"durability_loss" binding:"omitempty,min=0"`
 	SharerID       string  `json:"sharer_id" binding:"required"`
 }
@@ -93,13 +93,19 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 		Description:    req.Description,
 		TypeID:         req.TypeID,
 		Num:            req.Num,
-		Durability:     req.Durability,
-		DurabilityLoss: req.DurabilityLoss,
 		SharerID:       req.SharerID,
 		PickupCode:     pickupCode,
 		CreatedAt:      models.GetCurrentTime(),
 		ExpiresAt:      models.GetExpirationTime(),
 		IsClaimed:      false,
+	}
+	
+	// 只有当字段被提供时才设置值（使用JSON标签处理了omitempty，这里主要是为了清晰表达逻辑）
+	if req.Durability > 0 {
+		item.Durability = req.Durability
+	}
+	if req.DurabilityLoss > 0 {
+		item.DurabilityLoss = req.DurabilityLoss
 	}
 
 	// 保存物品
@@ -167,10 +173,12 @@ func (h *ItemHandler) ClaimItem(c *gin.Context) {
 	item.IsClaimed = true
 	item.ClaimerID = req.ClaimerID
 
-	if err := h.itemRepo.Update(item); err != nil {
+	
+	// 物品被领取后从仓库中删除，这样总数统计就会下降
+	if err := h.itemRepo.Delete(req.PickupCode); err != nil {
 		c.JSON(http.StatusInternalServerError, ClaimItemResponse{
 			Code:    500,
-			Message: "更新物品状态失败: " + err.Error(),
+			Message: "领取物品失败: " + err.Error(),
 		})
 		return
 	}

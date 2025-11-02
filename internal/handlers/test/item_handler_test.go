@@ -79,6 +79,49 @@ func TestShareItem(t *testing.T) {
 	assert.NotEmpty(t, response.ExpiresAt)
 }
 
+func TestShareItemWithoutDurabilityFields(t *testing.T) {
+	router, itemRepo := setupTestRouter()
+
+	// 准备请求数据（不包含Durability和DurabilityLoss字段）
+	requestData := map[string]interface{}{
+		"name":        "Test Item Without Durability",
+		"description": "Item without durability fields",
+		"type_id":     1002,
+		"num":         1,
+		"sharer_id":   "player456",
+	}
+
+	requestBody, err := json.Marshal(requestData)
+	assert.NoError(t, err)
+
+	// 创建请求
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/items/share", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	// 执行请求
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// 验证响应
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// 解析响应
+	var response handlers.ShareItemResponse
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	// 验证响应内容
+	assert.Equal(t, "Item shared successfully! Quack!", response.Message)
+	assert.NotEmpty(t, response.PickupCode)
+
+	// 验证物品确实被创建并且Durability字段默认为0
+	item, err := itemRepo.GetByPickupCode(response.PickupCode)
+	assert.NoError(t, err)
+	assert.NotNil(t, item)
+	assert.Equal(t, float64(0), item.Durability)
+	assert.Equal(t, float64(0), item.DurabilityLoss)
+}
+
 func TestShareItemInvalidRequest(t *testing.T) {
 	router, _ := setupTestRouter()
 

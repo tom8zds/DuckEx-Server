@@ -1,137 +1,462 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>物品数量统计图表</title>
+	<title>DuckEx 鸭鸭闪送</title>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<style>
+		/* 全局样式和CSS变量 */
+		:root {
+			--primary-color: #3498db;
+			--primary-dark: #2980b9;
+			--secondary-color: #2ecc71;
+			--background-color: #f8f9fa;
+			--card-bg: #ffffff;
+			--text-primary: #333333;
+			--text-secondary: #666666;
+			--border-radius: 16px;
+			--border-radius-small: 12px;
+			--shadow-light: 0 4px 15px rgba(0, 0, 0, 0.08);
+			--shadow-medium: 0 8px 30px rgba(0, 0, 0, 0.12);
+			--shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.16);
+			--transition-fast: 0.2s ease;
+			--transition-medium: 0.3s ease;
+			--padding-base: 20px;
+		}
+
 		body {
-				font-family: Arial, sans-serif;
-				margin: 0;
-				padding: 20px;
-				background-color: #f5f5f5;
-			}
-			.health-info {
-				background-color: #f0f8ff;
-				border: 1px solid #ddd;
-				border-radius: 8px;
-				padding: 15px;
-				margin-bottom: 20px;
-			}
-			.health-info h2 {
-				margin-top: 0;
-				color: #333;
-				font-size: 18px;
-			}
-			.health-stats {
-				display: flex;
-				flex-wrap: wrap;
-				gap: 20px;
-			}
-			.stat-item {
-				display: flex;
-				flex-direction: column;
-				min-width: 150px;
-			}
-			.stat-label {
-				font-size: 12px;
-				color: #666;
-				margin-bottom: 5px;
-			}
-			.stat-value {
-				font-size: 16px;
-				font-weight: bold;
-				color: #333;
-			}
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+			margin: 0;
+			padding: 20px;
+			background-color: var(--background-color);
+			color: var(--text-primary);
+			line-height: 1.6;
+		}
+
+		/* 卡片样式 */
 		.container {
 			max-width: 1200px;
 			margin: 0 auto;
-			background-color: white;
-			padding: 20px;
-			border-radius: 8px;
-			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			background-color: var(--card-bg);
+			padding: var(--padding-base);
+			border-radius: var(--border-radius);
+			box-shadow: var(--shadow-light);
+			overflow: hidden;
+			transition: box-shadow var(--transition-medium);
 		}
+
+		.container:hover {
+			box-shadow: var(--shadow-medium);
+		}
+
+		/* 标题样式 */
 		h1 {
-			color: #333;
+			color: var(--text-primary);
 			text-align: center;
+			margin-bottom: 20px;
+			font-weight: 600;
+			font-size: 1.8rem;
+			letter-spacing: -0.5px;
 		}
+
+		/* Logo和Steam链接样式 */
+		.header-section {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			margin-bottom: 30px;
+			gap: 20px;
+		}
+
+		.main-logo {
+			max-width: 200px;
+			height: auto;
+			border-radius: var(--border-radius-small);
+			transition: all var(--transition-medium);
+			box-shadow: var(--shadow-light);
+		}
+
+		.main-logo:hover {
+			transform: scale(1.05);
+			box-shadow: var(--shadow-medium);
+		}
+
+		.steam-link {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			padding: 10px 20px;
+			background: linear-gradient(135deg, #1b2838 0%, #2a475e 100%);
+			border-radius: var(--border-radius-small);
+			text-decoration: none;
+			transition: all var(--transition-medium);
+			box-shadow: var(--shadow-light);
+		}
+
+		.steam-link:hover {
+			transform: translateY(-3px);
+			box-shadow: var(--shadow-hover);
+			filter: brightness(1.1);
+		}
+
+		.steam-logo {
+			width: 50px;
+			height: 50px;
+			transition: transform var(--transition-fast);
+		}
+
+		.steam-link:hover .steam-logo {
+			transform: rotate(5deg);
+		}
+
+		.steam-text {
+			color: white;
+			font-weight: 600;
+			margin-left: 10px;
+			font-size: 1rem;
+			letter-spacing: 0.5px;
+		}
+
+		/* 健康信息卡片样式 */
+		.health-info {
+			background: linear-gradient(135deg, #e8f4fd 0%, #f0f8ff 100%);
+			border: none;
+			border-radius: var(--border-radius);
+			padding: 25px;
+			margin-bottom: 25px;
+			box-shadow: var(--shadow-light);
+			transition: all var(--transition-medium);
+			position: relative;
+			overflow: hidden;
+		}
+
+		.health-info::before {
+			content: '';
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 5px;
+			height: 100%;
+			background: linear-gradient(to bottom, var(--primary-color), var(--secondary-color));
+		}
+
+		.health-info:hover {
+			transform: translateY(-2px);
+			box-shadow: var(--shadow-medium);
+		}
+
+		.health-info h2 {
+			margin-top: 0;
+			margin-bottom: 20px;
+			color: var(--text-primary);
+			font-size: 1.3rem;
+			font-weight: 600;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			position: relative;
+			z-index: 1;
+		}
+
+		.health-info h2:before {
+			content: '🩺';
+			font-size: 1.5rem;
+		}
+
+		/* 统计数据样式 */
+		.health-stats {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 20px;
+			justify-content: center;
+			animation: fadeInUp 0.5s ease;
+		}
+
+		@keyframes fadeInUp {
+			from {
+				opacity: 0;
+				transform: translateY(20px);
+			}
+
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		.stat-item {
+			display: flex;
+			flex-direction: column;
+			min-width: 140px;
+			background: white;
+			padding: 15px;
+			border-radius: var(--border-radius-small);
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+			transition: all var(--transition-medium);
+			text-align: center;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.stat-item::after {
+			content: '';
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			width: 100%;
+			height: 3px;
+			background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+			transform: scaleX(0);
+			transition: transform var(--transition-medium);
+			transform-origin: left;
+		}
+
+		.stat-item:hover {
+			transform: translateY(-3px);
+			box-shadow: var(--shadow-light);
+		}
+
+		.stat-item:hover::after {
+			transform: scaleX(1);
+		}
+
+		.stat-label {
+			font-size: 14px;
+			color: var(--text-secondary);
+			margin-bottom: 8px;
+			font-weight: 500;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			transition: color var(--transition-fast);
+		}
+
+		.stat-item:hover .stat-label {
+			color: var(--primary-color);
+		}
+
+		.stat-value {
+			font-size: 1.2rem;
+			font-weight: 700;
+			color: var(--primary-color);
+			line-height: 1.2;
+			transition: transform var(--transition-fast);
+		}
+
+		.stat-item:hover .stat-value {
+			transform: scale(1.05);
+		}
+
+		/* 状态指示器样式 */
+		.status-indicator {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 5px;
+			padding: 4px 12px;
+			border-radius: 20px;
+			font-size: 0.9rem;
+			font-weight: 600;
+			transition: all var(--transition-medium);
+		}
+
+		.status-ok {
+			background-color: rgba(46, 204, 113, 0.1);
+			color: #27ae60;
+			border: 1px solid rgba(46, 204, 113, 0.3);
+		}
+
+		.status-error {
+			background-color: rgba(231, 76, 60, 0.1);
+			color: #e74c3c;
+			border: 1px solid rgba(231, 76, 60, 0.3);
+		}
+
+		.status-unknown {
+			background-color: rgba(127, 140, 141, 0.1);
+			color: #7f8c8d;
+			border: 1px solid rgba(127, 140, 141, 0.3);
+		}
+
+		/* 图表容器样式 */
 		.chart-container {
 			position: relative;
 			height: 400px;
-			margin-top: 20px;
+			margin-top: 25px;
+			padding: 20px;
+			background: white;
+			border-radius: var(--border-radius);
+			box-shadow: var(--shadow-light);
 		}
+
+		/* 刷新按钮样式 */
 		.refresh-btn {
-			background-color: #4CAF50;
+			background: linear-gradient(135deg, var(--secondary-color) 0%, #27ae60 100%);
 			color: white;
 			border: none;
-			padding: 10px 20px;
+			padding: 12px 24px;
 			text-align: center;
 			text-decoration: none;
 			display: inline-block;
-			font-size: 16px;
+			font-size: 1rem;
+			font-weight: 600;
 			margin: 10px 0;
 			cursor: pointer;
-			border-radius: 4px;
+			border-radius: var(--border-radius-small);
+			transition: all var(--transition-medium);
+			box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+			letter-spacing: 0.5px;
 		}
+
 		.refresh-btn:hover {
-			background-color: #45a049;
+			transform: translateY(-2px);
+			box-shadow: 0 8px 20px rgba(46, 204, 113, 0.4);
+			filter: brightness(1.05);
 		}
+
+		.refresh-btn:active {
+			transform: translateY(0);
+		}
+
+		/* 加载状态样式 */
 		.loading {
 			text-align: center;
-			padding: 20px;
-			color: #666;
+			padding: 30px;
+			color: var(--text-secondary);
+			font-size: 1.1rem;
+			font-weight: 500;
+			background: white;
+			border-radius: var(--border-radius-small);
+			margin: 20px 0;
+		}
+
+		/* 响应式设计 */
+		@media (max-width: 768px) {
+			:root {
+				--border-radius: 12px;
+				--border-radius-small: 10px;
+				--padding-base: 15px;
+			}
+
+			h1 {
+				font-size: 1.5rem;
+			}
+
+			.header-section {
+				gap: 15px;
+			}
+
+			.main-logo {
+				max-width: 150px;
+			}
+
+			.steam-logo {
+				width: 40px;
+				height: 40px;
+			}
+
+			.stat-item {
+				min-width: 120px;
+				padding: 12px;
+			}
+
+			.stat-value {
+				font-size: 1.1rem;
+			}
+
+			.chart-container {
+				height: 300px;
+				padding: 15px;
+			}
+
+			.refresh-btn {
+				padding: 10px 20px;
+				font-size: 0.9rem;
+			}
+		}
+
+		@media (max-width: 480px) {
+			body {
+				padding: 10px;
+			}
+
+			.health-stats {
+				flex-direction: column;
+				align-items: center;
+				gap: 15px;
+			}
+
+			.stat-item {
+				min-width: 100%;
+				max-width: 300px;
+			}
 		}
 	</style>
 </head>
+
 <body>
 	<div class="container">
-		<h1>物品数量统计柱状图</h1>
-			
-			<!-- 健康状态信息区域 -->
-			<div class="health-info">
-				<h2>服务健康状态</h2>
-				<div class="health-stats">
-					<div class="stat-item">
-						<span class="stat-label">服务状态:</span>
-						<span id="health-status" class="stat-value">加载中...</span>
-					</div>
-					<div class="stat-item">
-						<span class="stat-label">总物品数:</span>
-						<span id="total-items" class="stat-value">加载中...</span>
-					</div>
-					<div class="stat-item">
-						<span class="stat-label">小时内处理:</span>
-						<span id="hourly-processed" class="stat-value">加载中...</span>
-					</div>
-					<div class="stat-item">
-						<span class="stat-label">内存使用:</span>
-						<span id="memory-usage" class="stat-value">加载中...</span>
-					</div>
-					<div class="stat-item">
-						<span class="stat-label">更新时间:</span>
-						<span id="update-time" class="stat-value">加载中...</span>
-					</div>
+		<h1>DuckEx 鸭鸭闪送</h1>
+
+		<div class="header-section">
+			<!-- logo 居中 -->
+			<img src="/static/logo.png" alt="DuckEx 鸭鸭闪送" class="main-logo">
+
+			<!-- steam 链接 -->
+			<a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3595771516" target="_blank"
+				class="steam-link">
+				<img src="https://community.fastly.steamstatic.com/public/shared/images/header/logo_steam.svg"
+					alt="Steam" class="steam-logo">
+				<span class="steam-text">访问创意工坊</span>
+			</a>
+		</div>
+
+		<!-- 健康状态信息区域 -->
+		<div class="health-info">
+			<h2>服务健康状态</h2>
+			<div class="health-stats">
+				<div class="stat-item">
+					<span class="stat-label">服务状态:</span>
+					<span id="health-status" class="stat-value">加载中...</span>
+				</div>
+				<div class="stat-item">
+					<span class="stat-label">总物品数:</span>
+					<span id="total-items" class="stat-value">加载中...</span>
+				</div>
+				<div class="stat-item">
+					<span class="stat-label">小时内处理:</span>
+					<span id="hourly-processed" class="stat-value">加载中...</span>
+				</div>
+				<div class="stat-item">
+					<span class="stat-label">内存使用:</span>
+					<span id="memory-usage" class="stat-value">加载中...</span>
+				</div>
+				<div class="stat-item">
+					<span class="stat-label">更新时间:</span>
+					<span id="update-time" class="stat-value">加载中...</span>
 				</div>
 			</div>
-			
-			<button class="refresh-btn" onclick="loadChartData()">刷新数据</button>
-			<div class="loading" id="loading">加载数据中...</div>
-			<div class="chart-container">
-				<canvas id="statisticsChart"></canvas>
-			</div>
+		</div>
+
+		<button class="refresh-btn" onclick="loadChartData()">刷新数据</button>
+		<div class="loading" id="loading">加载数据中...</div>
+		<div class="chart-container">
+			<canvas id="statisticsChart"></canvas>
+		</div>
 	</div>
-	
+
 	<script>
 		let myChart;
-		
+
 		// 加载图表数据
 		function loadChartData() {
 			document.getElementById('loading').style.display = 'block';
-			
+
 			// 同时更新健康数据
 			displayHealthData();
-			
+
 			fetch('/api/v1/statistics/items')
 				.then(response => response.json())
 				.then(data => {
@@ -148,23 +473,28 @@
 					alert('加载数据时发生错误');
 				});
 		}
-		
+
 		// 更新图表
 		function updateChart(timestamps, counts) {
 			// 格式化时间戳为更友好的格式
 			const formattedLabels = timestamps.map(ts => {
 				const date = new Date(ts);
-				return `${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+				return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
 			});
-			
+
 			const ctx = document.getElementById('statisticsChart').getContext('2d');
-			
+
 			// 销毁旧图表
 			if (myChart) {
 				myChart.destroy();
 			}
-			
+
 			// 创建新图表 - 柱状图
+			// 创建渐变背景
+			const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+			gradient.addColorStop(0, 'rgba(54, 162, 235, 0.8)');
+			gradient.addColorStop(1, 'rgba(54, 162, 235, 0.1)');
+
 			myChart = new Chart(ctx, {
 				type: 'bar',
 				data: {
@@ -172,84 +502,180 @@
 					datasets: [{
 						label: '物品数量',
 						data: counts,
-						backgroundColor: 'rgba(54, 162, 235, 0.6)',
+						backgroundColor: gradient,
 						borderColor: 'rgb(54, 162, 235)',
-						borderWidth: 1
+						borderWidth: 2,
+						borderSkipped: false,
+						barPercentage: 0.6,
+						categoryPercentage: 0.7,
+						hoverBackgroundColor: 'rgba(54, 162, 235, 1)',
+						hoverBorderColor: 'rgb(37, 117, 182)',
+						hoverBorderWidth: 3,
+						animation: {
+							duration: 2000,
+							easing: 'easeOutQuart'
+						}
 					}]
 				},
 				options: {
 					responsive: true,
 					maintainAspectRatio: false,
+					interaction: {
+						mode: 'index',
+						intersect: false,
+					},
 					plugins: {
 						legend: {
 							position: 'top',
+							labels: {
+								usePointStyle: true,
+								pointStyle: 'circle',
+								font: {
+									size: 14,
+									weight: 'bold'
+								},
+								padding: 20
+							}
 						},
 						title: {
 							display: true,
-							text: '物品数量变化趋势（每5分钟统计）'
+							text: '物品数量变化趋势（每5分钟统计）',
+							font: {
+								size: 18,
+								weight: 'bold'
+							},
+							padding: {
+								top: 10,
+								bottom: 30
+							},
+							color: '#333'
 						},
-						hover: {
-							mode: 'index',
-							intersect: false
+						tooltip: {
+							backgroundColor: 'rgba(0, 0, 0, 0.8)',
+							titleFont: {
+								size: 16,
+								weight: 'bold'
+							},
+							bodyFont: {
+								size: 14
+							},
+							padding: 15,
+							cornerRadius: 10,
+							displayColors: false,
+							callbacks: {
+								label: function (context) {
+									return `物品数量: ${context.parsed.y}`;
+								},
+								title: function (tooltipItems) {
+									return tooltipItems[0].label;
+								}
+							}
 						}
 					},
 					scales: {
+						x: {
+							grid: {
+								display: false
+							},
+							ticks: {
+								font: {
+									size: 12
+								},
+								color: '#666'
+							}
+						},
 						y: {
 							beginAtZero: true,
+							grid: {
+								color: 'rgba(0, 0, 0, 0.05)'
+							},
 							ticks: {
-								stepSize: 1
+								stepSize: 1,
+								font: {
+									size: 12
+								},
+								color: '#666',
+								callback: function (value) {
+									return value + ' 件';
+								}
 							}
 						}
+					},
+					animation: {
+						onComplete: function () {
+							// 图表加载完成后的动画效果
+							ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+							ctx.font = 'bold 20px Arial';
+							ctx.textAlign = 'center';
+							ctx.textBaseline = 'middle';
+							ctx.globalAlpha = 0.3;
+							ctx.fillText('DuckEx', ctx.canvas.width / 2, ctx.canvas.height / 2);
+							ctx.globalAlpha = 1;
+						}
+					},
+					hover: {
+						animationDuration: 300
 					}
 				}
 			});
 		}
-		
+
 		// 页面加载时显示健康数据并初始化图表
-			window.onload = function() {
-				// 显示健康数据
-				displayHealthData();
-				// 初始化图表
-				loadChartData();
-			};
-			
-			// 显示健康检查数据
-			function displayHealthData() {
-				// 如果window.healthData不存在，尝试从URL参数或直接请求获取
-				if (window.healthData) {
-					const data = window.healthData;
-					document.getElementById('health-status').textContent = data.status === 'ok' ? '✅ 正常运行' : '❌ 异常';
-					document.getElementById('total-items').textContent = data.statistics.total_items;
-					document.getElementById('hourly-processed').textContent = data.statistics.hourly_processed_items;
-					document.getElementById('memory-usage').textContent = 
-						data.statistics.memory_usage.current_mb + 'MB (' + 
-						data.statistics.memory_usage.percentage + ')';
-					document.getElementById('update-time').textContent = 
-						new Date(data.timestamp).toLocaleString('zh-CN');
+		window.onload = function () {
+			// 显示健康数据
+			displayHealthData();
+			// 初始化图表
+			loadChartData();
+		};
+
+		// 显示健康检查数据
+		function displayHealthData() {
+			// 如果window.healthData不存在，尝试从URL参数或直接请求获取
+			if (window.healthData) {
+				const data = window.healthData;
+				const statusElement = document.getElementById('health-status');
+				if (data.status === 'ok') {
+					statusElement.innerHTML = '<span class="status-indicator status-ok">正常运行</span>';
 				} else {
-					// 如果没有嵌入数据，则直接从health接口获取
-					fetch('/health')
-						.then(response => response.json())
-						.then(data => {
-							document.getElementById('health-status').textContent = data.status === 'ok' ? '✅ 正常运行' : '❌ 异常';
-							document.getElementById('total-items').textContent = data.statistics.total_items;
-							document.getElementById('hourly-processed').textContent = data.statistics.hourly_processed_items;
-							document.getElementById('memory-usage').textContent = 
-								data.statistics.memory_usage.current_mb + 'MB (' + 
-								data.statistics.memory_usage.percentage + ')';
-							document.getElementById('update-time').textContent = 
-								new Date(data.timestamp).toLocaleString('zh-CN');
-						})
-						.catch(error => {
-							console.error('Error fetching health data:', error);
-							document.getElementById('health-status').textContent = '❌ 无法获取';
-							document.getElementById('total-items').textContent = '无法获取';
-							document.getElementById('hourly-processed').textContent = '无法获取';
-							document.getElementById('memory-usage').textContent = '无法获取';
-							document.getElementById('update-time').textContent = '无法获取';
-						});
+					statusElement.innerHTML = '<span class="status-indicator status-error">异常</span>';
 				}
+				document.getElementById('total-items').textContent = data.statistics.total_items;
+				document.getElementById('hourly-processed').textContent = data.statistics.hourly_processed_items;
+				document.getElementById('memory-usage').textContent =
+					data.statistics.memory_usage.current_mb + 'MB (' +
+					data.statistics.memory_usage.percentage + ')';
+				document.getElementById('update-time').textContent =
+					new Date(data.timestamp).toLocaleString('zh-CN');
+			} else {
+				// 如果没有嵌入数据，则直接从health接口获取
+				fetch('/health')
+					.then(response => response.json())
+					.then(data => {
+						const statusElement = document.getElementById('health-status');
+						if (data.status === 'ok') {
+							statusElement.innerHTML = '<span class="status-indicator status-ok">✅ 正常运行</span>';
+						} else {
+							statusElement.innerHTML = '<span class="status-indicator status-error">❌ 异常</span>';
+						}
+						document.getElementById('total-items').textContent = data.statistics.total_items;
+						document.getElementById('hourly-processed').textContent = data.statistics.hourly_processed_items;
+						document.getElementById('memory-usage').textContent =
+							data.statistics.memory_usage.current_mb + 'MB (' +
+							data.statistics.memory_usage.percentage + ')';
+						document.getElementById('update-time').textContent =
+							new Date(data.timestamp).toLocaleString('zh-CN');
+					})
+					.catch(error => {
+						console.error('Error fetching health data:', error);
+						document.getElementById('health-status').innerHTML = '<span class="status-indicator status-unknown">❌ 无法获取</span>';
+						document.getElementById('total-items').textContent = '无法获取';
+						document.getElementById('hourly-processed').textContent = '无法获取';
+						document.getElementById('memory-usage').textContent = '无法获取';
+						document.getElementById('update-time').textContent = '无法获取';
+					});
 			}
+		}
 	</script>
 </body>
+
 </html>
