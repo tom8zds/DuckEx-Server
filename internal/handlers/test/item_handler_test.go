@@ -253,7 +253,6 @@ func TestConcurrentClaimItemRequests(t *testing.T) {
 	// 首先创建一个物品用于测试
 	pickupCode := "TEST123"
 	item := &models.Item{
-		ID:             "test-item-concurrent-claim",
 		Name:           "Claim Test Item",
 		Description:    "Test concurrent claiming",
 		TypeID:         2000,
@@ -323,7 +322,6 @@ func TestClaimItem(t *testing.T) {
 	// 先创建一个物品用于测试领取
 	pickupCode := "123456"
 	item := &models.Item{
-		ID:             "test-item-for-claim",
 		Name:           "Claimable Item",
 		Description:    "This item is ready to be claimed",
 		TypeID:         2001,

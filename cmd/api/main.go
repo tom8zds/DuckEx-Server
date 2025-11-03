@@ -77,6 +77,15 @@ func main() {
 
 	// 初始化仓库（使用SQLite实现）
 	itemRepo := models.NewSQLiteItemRepository()
+	
+	// 从JSON备份文件迁移数据到SQLite
+	jsonBackupPath := "./items_backup.json"
+	log.Printf("Attempting to migrate data from JSON backup at %s", jsonBackupPath)
+	if err := itemRepo.MigrateFromJSON(jsonBackupPath); err != nil {
+		log.Printf("Warning: JSON migration failed: %v, continuing without migration", err)
+	} else {
+		log.Printf("JSON migration completed successfully")
+	}
 
 	// 保存PID文件
 	pidFile := defaultPIDFile

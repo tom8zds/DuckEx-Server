@@ -462,6 +462,10 @@
 				.then(data => {
 					document.getElementById('loading').style.display = 'none';
 					if (data.status === 'ok') {
+						if (!data.timestamps) {
+							alert('没有数据');
+							return;
+						}
 						updateChart(data.timestamps, data.counts);
 					} else {
 						alert('加载数据失败: ' + data.message);
