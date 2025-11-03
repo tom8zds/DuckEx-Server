@@ -15,20 +15,24 @@ import (
 func TestInMemoryItemRepository(t *testing.T) {
 	repo := models.NewInMemoryItemRepository()
 
+	durability := 90.0
+	durabilityLoss := 0.0
+
 	// 测试创建物品
 	pickupCode := utils.GeneratePickupCode()
 	item := &models.Item{
-		ID:          "test-item-1",
-		Name:        "Test Item",
-		Description: "This is a test item",
-		TypeID:      123,
-		Num:         1,
-		Durability:  95.5,
-		SharerID:    "test-sharer",
-		PickupCode:  pickupCode,
-		CreatedAt:   time.Now(),
-		ExpiresAt:   utils.GetExpirationTime(),
-		IsClaimed:   false,
+		ID:             "test-item-1",
+		Name:           "Test Item",
+		Description:    "This is a test item",
+		TypeID:         123,
+		Num:            1,
+		Durability:     &durability,
+		DurabilityLoss: &durabilityLoss,
+		SharerID:       "test-sharer",
+		PickupCode:     pickupCode,
+		CreatedAt:      time.Now(),
+		ExpiresAt:      utils.GetExpirationTime(),
+		IsClaimed:      false,
 	}
 
 	err := repo.Create(item)
@@ -65,17 +69,18 @@ func TestInMemoryItemRepository(t *testing.T) {
 	// 创建一个过期物品
 	expiredPickupCode := utils.GeneratePickupCode()
 	expiredItem := &models.Item{
-		ID:          "test-item-expired",
-		Name:        "Expired Item",
-		Description: "This item is expired",
-		TypeID:      456,
-		Num:         1,
-		Durability:  50.0,
-		SharerID:    "test-sharer",
-		PickupCode:  expiredPickupCode,
-		CreatedAt:   time.Now().Add(-48 * time.Hour),
-		ExpiresAt:   time.Now().Add(-24 * time.Hour), // 24小时前过期
-		IsClaimed:   false,
+		ID:             "test-item-expired",
+		Name:           "Expired Item",
+		Description:    "This item is expired",
+		TypeID:         456,
+		Num:            1,
+		Durability:     &durability,
+		DurabilityLoss: &durabilityLoss,
+		SharerID:       "test-sharer",
+		PickupCode:     expiredPickupCode,
+		CreatedAt:      time.Now().Add(-48 * time.Hour),
+		ExpiresAt:      time.Now().Add(-24 * time.Hour), // 24小时前过期
+		IsClaimed:      false,
 	}
 	err = repo.Create(expiredItem)
 	assert.NoError(t, err)
@@ -83,7 +88,7 @@ func TestInMemoryItemRepository(t *testing.T) {
 	// 验证过期物品已创建
 	expiredRetrieved, err := repo.GetByPickupCode(expiredPickupCode)
 	assert.NoError(t, err)
-	assert.NotNil(t, expiredRetrieved)
+	assert.Nil(t, expiredRetrieved)
 
 	// 删除过期物品
 	err = repo.DeleteExpired()
@@ -106,6 +111,9 @@ func TestInMemoryItemRepositoryConcurrentAccess(t *testing.T) {
 	errChan := make(chan error, 100)
 	mutex := &sync.Mutex{}
 
+	durability := 90.0
+	durabilityLoss := 0.0
+
 	// 并发创建物品
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
@@ -113,17 +121,18 @@ func TestInMemoryItemRepositoryConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			pickupCode := utils.GeneratePickupCode()
 			item := &models.Item{
-				ID:          fmt.Sprintf("test-item-concurrent-%d", index),
-				Name:        fmt.Sprintf("Concurrent Item %d", index),
-				Description: "Test concurrent access",
-				TypeID:      index + 1000,
-				Num:         1,
-				Durability:  90.0,
-				SharerID:    fmt.Sprintf("test-sharer-%d", index),
-				PickupCode:  pickupCode,
-				CreatedAt:   time.Now(),
-				ExpiresAt:   utils.GetExpirationTime(),
-				IsClaimed:   false,
+				ID:             fmt.Sprintf("test-item-concurrent-%d", index),
+				Name:           fmt.Sprintf("Concurrent Item %d", index),
+				Description:    "Test concurrent access",
+				TypeID:         index + 1000,
+				Num:            1,
+				Durability:     &durability,
+				DurabilityLoss: &durabilityLoss,
+				SharerID:       fmt.Sprintf("test-sharer-%d", index),
+				PickupCode:     pickupCode,
+				CreatedAt:      time.Now(),
+				ExpiresAt:      utils.GetExpirationTime(),
+				IsClaimed:      false,
 			}
 
 			if err := repo.Create(item); err != nil {

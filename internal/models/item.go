@@ -27,18 +27,19 @@ func init() {
 
 // Item 物品模型
 type Item struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	TypeID      int       `json:"type_id"`
-	Num         int       `json:"num"`
-	Durability  float64   `json:"durability"`
-	SharerID    string    `json:"sharer_id"`
-	PickupCode  string    `json:"pickup_code"`
-	CreatedAt   time.Time `json:"created_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	IsClaimed   bool      `json:"is_claimed"`
-	ClaimerID   string    `json:"claimer_id"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Description    string     `json:"description"`
+	TypeID         int        `json:"type_id"`
+	Num            int        `json:"num"`
+	Durability     *float64   `json:"durability,omitempty"`
+	DurabilityLoss *float64    `json:"durability_loss,omitempty"`
+	SharerID       string     `json:"sharer_id"`
+	PickupCode     string     `json:"pickup_code"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	IsClaimed      bool       `json:"is_claimed"`
+	ClaimerID      string     `json:"claimer_id"`
 }
 
 // ItemRepository 物品仓库接口
@@ -49,6 +50,15 @@ type ItemRepository interface {
 	Delete(pickupCode string) error
 	DeleteExpired() error
 	GetAll() []*Item
+	RecordAPICall(isSuccess bool, callType string)
+	GetProcessedCountInTimeRange(startTime, endTime time.Time) int
+}
+
+// APICallRecord API调用记录
+type APICallRecord struct {
+	Timestamp time.Time
+	IsSuccess bool
+	CallType  string // "share" 或 "claim"
 }
 
 // InMemoryItemRepository 内存实现的物品仓库
@@ -59,6 +69,8 @@ type InMemoryItemRepository struct {
 	fileMutex   sync.Mutex // 用于文件操作的互斥锁
 	ticker      *time.Ticker
 	stopChan    chan struct{}
+	apiCalls    []APICallRecord // 记录API调用历史
+	apiCallsMutex sync.RWMutex   // 用于API调用记录的互斥锁
 }
 
 // NewInMemoryItemRepository 创建新的内存仓库实例
@@ -68,11 +80,13 @@ func NewInMemoryItemRepository() *InMemoryItemRepository {
 	
 	// 创建仓库实例
 	repo := &InMemoryItemRepository{
-		items:       make(map[string]*Item),
-		storagePath: storagePath,
-		fileMutex:   sync.Mutex{},
-		ticker:      time.NewTicker(5 * time.Minute),
-		stopChan:    make(chan struct{}),
+		items:         make(map[string]*Item),
+		storagePath:   storagePath,
+		fileMutex:     sync.Mutex{},
+		ticker:        time.NewTicker(5 * time.Minute),
+		stopChan:      make(chan struct{}),
+		apiCalls:      make([]APICallRecord, 0),
+		apiCallsMutex: sync.RWMutex{},
 	}
 	
 	// 从文件加载未领取的物品
@@ -196,16 +210,41 @@ func (r *InMemoryItemRepository) GetTotalCount() int {
 	return len(r.items)
 }
 
-// GetProcessedCountInTimeRange 获取指定时间范围内处理的物品数量（分享和领取）
+// RecordAPICall 记录API调用
+func (r *InMemoryItemRepository) RecordAPICall(isSuccess bool, callType string) {
+	r.apiCallsMutex.Lock()
+	defer r.apiCallsMutex.Unlock()
+	
+	// 记录API调用
+	record := APICallRecord{
+		Timestamp: GetCurrentTime(),
+		IsSuccess: isSuccess,
+		CallType:  callType,
+	}
+	r.apiCalls = append(r.apiCalls, record)
+	
+	// 限制记录数量，只保留最近7天的数据
+	sevenDaysAgo := GetCurrentTime().AddDate(0, 0, -7)
+	var validRecords []APICallRecord
+	for _, call := range r.apiCalls {
+		if call.Timestamp.After(sevenDaysAgo) {
+			validRecords = append(validRecords, call)
+		}
+	}
+	r.apiCalls = validRecords
+}
+
+// GetProcessedCountInTimeRange 获取指定时间范围内成功处理的API调用次数
 func (r *InMemoryItemRepository) GetProcessedCountInTimeRange(startTime, endTime time.Time) int {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+	r.apiCallsMutex.RLock()
+	defer r.apiCallsMutex.RUnlock()
+	
 	processedCount := 0
-	for _, item := range r.items {
-		// 统计创建时间在指定范围内的物品（分享）
-		// 注意：对于已领取的物品，我们也计入统计
-		if (item.CreatedAt.After(startTime) || item.CreatedAt.Equal(startTime)) &&
-		   (item.CreatedAt.Before(endTime) || item.CreatedAt.Equal(endTime)) {
+	for _, call := range r.apiCalls {
+		// 只统计成功的调用，并且时间在指定范围内
+		if call.IsSuccess &&
+		   (call.Timestamp.After(startTime) || call.Timestamp.Equal(startTime)) &&
+		   (call.Timestamp.Before(endTime) || call.Timestamp.Equal(endTime)) {
 			processedCount++
 		}
 	}

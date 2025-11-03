@@ -114,8 +114,12 @@ func main() {
 	log.Printf("Memory monitor initialized with max memory: %d MB", maxMemoryMB)
 	memoryMonitor := utils.NewMemoryMonitor(maxMemoryMB)
 
+	// 初始化审计服务
+	auditService := utils.NewAuditService("./audit_log.json")
+	log.Println("Audit service initialized with log file: ./audit_log.json")
+
 	// 初始化处理器
-	itemHandler := handlers.NewItemHandler(itemRepo, memoryMonitor)
+	itemHandler := handlers.NewItemHandler(itemRepo, memoryMonitor, auditService)
 
 	// 设置Gin模式
 	gin.SetMode(gin.ReleaseMode)
@@ -136,6 +140,11 @@ func main() {
 		}
 
 		c.Next()
+	})
+
+	// 审计查看器页面
+	r.GET("/audit", func(c *gin.Context) {
+		c.File("static/audit_viewer.html")
 	})
 
 	// 健康检查端点
@@ -181,6 +190,26 @@ func main() {
 		// 内存状态
 		api.GET("/memory", func(c *gin.Context) {
 			c.JSON(http.StatusOK, memoryMonitor.GetStatus())
+		})
+
+		// 获取审计日志数据（支持分页）
+		api.GET("/audit/logs", func(c *gin.Context) {
+			// 从请求参数获取分页信息
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+			// 调用分页查询方法
+			paginatedLogs := auditService.GetLogsWithPagination(page, pageSize)
+
+			// 返回分页响应
+			c.JSON(http.StatusOK, gin.H{
+				"status":      "success",
+				"total":       paginatedLogs.Total,
+				"page":        paginatedLogs.Page,
+				"page_size":   paginatedLogs.PageSize,
+				"total_pages": paginatedLogs.TotalPages,
+				"logs":        paginatedLogs.Logs,
+			})
 		})
 
 		// 获取物品数量统计数据（用于折线图）
@@ -363,7 +392,7 @@ func main() {
 		memoryUsageMB := memoryStatus["current_usage_mb"].(int64)
 		memoryUsagePercent := memoryStatus["usage_percentage"].(float64) * 100
 		maxMemoryMB := memoryStatus["max_memory_mb"].(int64)
-		
+
 		// 读取HTML文件内容
 		htmlContent, err := os.ReadFile("./static/statistics_chart.html")
 		if err != nil {
@@ -371,7 +400,7 @@ func main() {
 			c.String(http.StatusInternalServerError, "Error loading page")
 			return
 		}
-		
+
 		// 在HTML头部添加健康数据脚本
 		healthDataScript := fmt.Sprintf(`
 		<script>
@@ -392,14 +421,14 @@ func main() {
 			};
 		</script>
 		`, now.Format(time.RFC3339), totalItemsCount, hourlyProcessedCount, memoryUsageMB, memoryUsagePercent, maxMemoryMB)
-		
+
 		// 在head标签后插入健康数据脚本
 		htmlStr := string(htmlContent)
 		headEndIndex := strings.Index(htmlStr, "</head>")
 		if headEndIndex > 0 {
 			htmlStr = htmlStr[:headEndIndex] + healthDataScript + htmlStr[headEndIndex:]
 		}
-		
+
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.String(http.StatusOK, htmlStr)
 	})
@@ -469,5 +498,83 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
+	// 在服务器退出前将所有物品写入CSV
+	exportItemsToCSV(itemRepo, "./items_export.csv")
 	log.Println("Server exiting")
+}
+
+// exportItemsToCSV 将所有物品数据导出到CSV文件
+func exportItemsToCSV(itemRepo models.ItemRepository, filePath string) {
+	log.Println("Exporting all items to CSV file...")
+
+	// 获取所有物品
+	items := itemRepo.GetAll()
+
+	// 创建CSV文件
+	file, err := os.Create(filePath)
+	if err != nil {
+		log.Printf("Error creating CSV file: %v", err)
+		return
+	}
+	defer file.Close()
+
+	// 创建CSV写入器
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// 写入CSV表头
+	headers := []string{
+		"ID", "Name", "Description", "TypeID", "Num",
+		"Durability", "DurabilityLoss", "SharerID", "PickupCode",
+		"CreatedAt", "ExpiresAt", "IsClaimed", "ClaimerID",
+	}
+	if err := writer.Write(headers); err != nil {
+		log.Printf("Error writing CSV headers: %v", err)
+		return
+	}
+
+	// 写入物品数据
+	for _, item := range items {
+		// 处理可空字段
+		var durability, durabilityLoss string
+		if item.Durability != nil {
+			durability = fmt.Sprintf("%.2f", *item.Durability)
+		} else {
+			durability = ""
+		}
+		if item.DurabilityLoss != nil {
+			durabilityLoss = fmt.Sprintf("%.2f", *item.DurabilityLoss)
+		} else {
+			durabilityLoss = ""
+		}
+
+		row := []string{
+			item.ID,
+			item.Name,
+			item.Description,
+			fmt.Sprintf("%d", item.TypeID),
+			fmt.Sprintf("%d", item.Num),
+			durability,
+			durabilityLoss,
+			item.SharerID,
+			item.PickupCode,
+			item.CreatedAt.Format(time.RFC3339),
+			item.ExpiresAt.Format(time.RFC3339),
+			fmt.Sprintf("%t", item.IsClaimed),
+			item.ClaimerID,
+		}
+
+		if err := writer.Write(row); err != nil {
+			log.Printf("Error writing item %s to CSV: %v", item.ID, err)
+			continue
+		}
+	}
+
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		log.Printf("Error flushing CSV writer: %v", err)
+		return
+	}
+
+	log.Printf("Successfully exported %d items to CSV file: %s", len(items), filePath)
 }

@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DuckEx-Server 测试界面</title>
+    <style>
+        /* 全局变量 */
+        :root {
+            --primary-color: #1a73e8;
+            --primary-hover: #1557b0;
+            --success-color: #4caf50;
+            --success-hover: #388e3c;
+            --danger-color: #d32f2f;
+            --warning-color: #ff9800;
+            --background-color: #f5f7fa;
+            --card-background: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --border-color: #e0e0e0;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
+            --border-radius: 8px;
+            --transition: all 0.3s ease;
+        }
+
+        /* 基础样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* 标题样式 */
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        h2 {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-weight: 500;
+        }
+
+        h3 {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        /* 卡片容器 */
+        .container {
+            background-color: var(--card-background);
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .container:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        /* 按钮组 */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        /* 表单样式 */
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        input,
+        button {
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 16px;
+            transition: var(--transition);
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            min-height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* 不同类型按钮 */
+        .primary-button {
+            background-color: var(--primary-color);
+        }
+
+        .primary-button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .secondary-button {
+            background-color: var(--secondary-color, #6c757d);
+        }
+
+        .secondary-button:hover {
+            background-color: #424242;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn-success:hover {
+            background-color: var(--success-hover);
+        }
+
+        .btn-warning {
+            background-color: var(--warning-color);
+        }
+
+        .btn-warning:hover {
+            background-color: #e68900;
+        }
+
+        /* 复制按钮样式 */
+        .copy-button {
+            margin-left: 10px;
+            background-color: var(--success-color);
+            padding: 6px 12px;
+            font-size: 14px;
+            min-height: auto;
+        }
+        
+        /* 粘贴按钮样式 */
+        .paste-button {
+            background-color: var(--secondary-color, #6c757d);
+            padding: 0 12px;
+            min-height: auto;
+            width: 45px;
+        }
+        
+        .paste-button:hover {
+            background-color: #424242;
+        }
+        
+        /* 输入组样式 */
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+        
+        /* 必填项标记 */
+        .required {
+            color: var(--danger-color);
+            font-weight: bold;
+            margin-left: 4px;
+        }
+
+        .copy-button:hover {
+            background-color: var(--success-hover);
+        }
+
+        /* 结果显示区域 */
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+
+        .result.success {
+            background-color: #e8f5e9;
+            border-color: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .result.error {
+            background-color: #ffebee;
+            border-color: #ffcdd2;
+            color: #c62828;
+        }
+
+        /* 代码块样式 */
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: var(--border-radius);
+            overflow-x: auto;
+            margin: 15px 0;
+            font-size: 14px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* 列表样式 */
+        ul {
+            list-style-type: none;
+            padding-left: 15px;
+            margin: 15px 0;
+        }
+
+        li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        li:before {
+            content: "•";
+            color: var(--primary-color);
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        /* 加载状态 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        /* 加载动画 */
+        .loading-spinner {
+            display: none;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        .spinner .path {
+            stroke: white;
+            stroke-linecap: round;
+            animation: dash 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes dash {
+            0% {
+                stroke-dasharray: 1, 150;
+                stroke-dashoffset: 0;
+            }
+            50% {
+                stroke-dasharray: 90, 150;
+                stroke-dashoffset: -35;
+            }
+            100% {
+                stroke-dasharray: 90, 150;
+                stroke-dashoffset: -124;
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 标签样式 */
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 12px;
+            background-color: #e0e0e0;
+            color: var(--text-secondary);
+            margin-left: 8px;
+        }
+
+        .badge-required {
+            background-color: #ffebee;
+            color: var(--danger-color);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 600px) {
+            body {
+                padding: 15px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            h2 {
+                font-size: 1.3rem;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>DuckEx-Server 接口测试</h1>
+
+    <!-- 工具按钮组 -->
+    <div class="btn-group">
+        <button id="loadTestDataBtn" class="btn-success">
+            加载测试数据
+        </button>
+        <button id="clearFormsBtn" class="btn-warning">
+            清空表单
+        </button>
+    </div>
+
+    <div class="container">
+        <h2>物品分享接口</h2>
+        <form id="shareForm">
+            <div class="form-row">
+                <label for="name">物品名称 <span class="required">*</span></label>
+                <input type="text" id="name" name="name" placeholder="输入物品名称" required>
+            </div>
+
+            <div class="form-row">
+                <label for="description">物品描述 <span class="required">*</span></label>
+                <input type="text" id="description" name="description" placeholder="输入物品描述" required>
+            </div>
+
+            <div class="form-row">
+                <label for="typeId">物品类型ID <span class="required">*</span></label>
+                <input type="number" id="typeId" name="type_id" placeholder="输入类型ID" required>
+            </div>
+
+            <div class="form-row">
+                <label for="num">物品数量 <span class="required">*</span></label>
+                <input type="number" id="num" name="num" placeholder="输入物品数量" min="1" required>
+            </div>
+
+            <div class="form-row">
+                <label for="durability">物品耐久度 <span class="required">*</span></label>
+                <input type="number" id="durability" name="durability" placeholder="输入物品耐久度" min="0" step="0.1"
+                    required>
+            </div>
+
+            <div class="form-row">
+                <label for="sharerId">分享者ID <span class="required">*</span></label>
+                <input type="text" id="sharerId" name="sharer_id" placeholder="输入分享者ID" required>
+            </div>
+
+            <button id="shareBtn" type="submit" class="primary-button">
+                <span id="shareBtnText">分享物品</span>
+                <span id="shareBtnLoading" class="loading-spinner">
+                    <svg class="spinner" viewBox="0 0 50 50">
+                        <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                    </svg>
+                </span>
+            </button>
+        </form>
+
+        <div class="result" id="shareResult">
+            <!-- 分享结果将显示在这里 -->
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>物品领取接口</h2>
+        <form id="claimForm">
+            <div class="form-row">
+                <label for="pickupCode">取件码 <span class="required">*</span></label>
+                <div class="input-group">
+                    <input type="text" id="pickupCode" name="pickup_code" placeholder="输入6位数取件码" required
+                        style="flex: 1;">
+                    <button type="button" class="paste-button" onclick="pasteFromClipboard()" title="从剪贴板粘贴">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label for="claimerId">领取者ID <span class="required">*</span></label>
+                <input type="text" id="claimerId" name="claimer_id" placeholder="输入领取者ID" required>
+            </div>
+
+            <button id="claimBtn" type="submit" class="primary-button">
+                <span id="claimBtnText">领取物品</span>
+                <span id="claimBtnLoading" class="loading-spinner">
+                    <svg class="spinner" viewBox="0 0 50 50">
+                        <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                    </svg>
+                </span>
+            </button>
+        </form>
+
+        <div class="result" id="claimResult">
+            <!-- 领取结果将显示在这里 -->
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>健康检查</h2>
+        <button id="healthCheckBtn" class="secondary-button">
+            <span id="healthBtnText">检查服务健康状态</span>
+            <span id="healthBtnLoading" class="loading-spinner">
+                <svg class="spinner" viewBox="0 0 50 50">
+                    <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                </svg>
+            </span>
+        </button>
+
+        <div class="result" id="healthResult">
+            <!-- 健康检查结果将显示在这里 -->
+        </div>
+    </div>
+
+    <script>
+        // API基础URL - 使用相对路径，以便在不同环境中正常工作
+        const API_BASE_URL = '/api/v1';
+
+        // 辅助函数：设置按钮加载状态
+        function setButtonLoading(buttonId, isLoading) {
+            const button = document.getElementById(buttonId);
+            const textElement = document.getElementById(buttonId + 'Text');
+            const loadingElement = document.getElementById(buttonId + 'Loading');
+
+            button.disabled = isLoading;
+            textElement.style.display = isLoading ? 'none' : 'inline';
+            loadingElement.style.display = isLoading ? 'inline-block' : 'none';
+        }
+
+        // 辅助函数：显示错误信息
+        function showError(resultElement, errorMessage) {
+            resultElement.className = 'result error';
+            resultElement.innerHTML = `
+                <h3>操作失败</h3>
+                <p><strong>错误信息：</strong>${errorMessage}</p>
+                <p>请检查您的输入或服务器连接状态。</p>
+            `;
+        }
+
+        // 物品分享表单提交
+        document.getElementById('shareForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('shareResult');
+
+            // 清空之前的结果
+            resultDiv.innerHTML = '';
+            resultDiv.className = 'result';
+
+            // 设置按钮加载状态
+            setButtonLoading('shareBtn', true);
+
+            try {
+                // 表单验证
+                const name = document.getElementById('name').value.trim();
+                const description = document.getElementById('description').value.trim();
+                const typeId = document.getElementById('typeId').value.trim();
+                const num = document.getElementById('num').value.trim();
+                const durability = document.getElementById('durability').value.trim();
+                const sharerId = document.getElementById('sharerId').value.trim();
+
+                if (!name) {
+                    showError(resultDiv, '物品名称不能为空');
+                    return;
+                }
+
+                if (!description) {
+                    showError(resultDiv, '物品描述不能为空');
+                    return;
+                }
+
+                if (!typeId || isNaN(typeId) || parseInt(typeId) <= 0) {
+                    showError(resultDiv, '请输入有效的类型ID');
+                    return;
+                }
+
+                if (!num || isNaN(num) || parseInt(num) <= 0) {
+                    showError(resultDiv, '请输入有效的物品数量');
+                    return;
+                }
+
+                if (!durability || isNaN(durability) || parseFloat(durability) < 0) {
+                    showError(resultDiv, '请输入有效的物品耐久度');
+                    return;
+                }
+
+                if (!sharerId) {
+                    showError(resultDiv, '分享者ID不能为空');
+                    return;
+                }
+
+                // 构建请求数据
+                const formData = {
+                    name: name,
+                    description: description,
+                    type_id: parseInt(typeId),
+                    num: parseInt(num),
+                    durability: parseFloat(durability),
+                    sharer_id: sharerId
+                };
+
+                console.log('分享物品请求数据:', formData);
+
+                // 发送请求 - 使用相对路径
+                const response = await fetch(`${API_BASE_URL}/items/share`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                // 检查是否为JSON响应
+                const contentType = response.headers.get('content-type');
+                let data;
+
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`非JSON响应: ${text}`);
+                }
+
+                // 显示结果
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h3>分享成功！</h3>
+                        <p><strong>消息：</strong>${data.message || '操作成功'}</p>
+                        <p><strong>取件码：</strong>${data.pickup_code} <button class="copy-button" onclick="copyToClipboard('${data.pickup_code}')">复制</button></p>
+                        <p><strong>过期时间：</strong>${data.expires_at || '未指定'}</p>
+                        <p><strong>原始响应：</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+
+                    // 如果有取件码，自动填充到领取表单
+                    if (data.pickup_code) {
+                        document.getElementById('pickupCode').value = data.pickup_code;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+                        <h3>分享失败</h3>
+                        <p><strong>状态码：</strong>${data.code || response.status}</p>
+                        <p><strong>错误信息：</strong>${data.message || data.error || '未知错误'}</p>
+                        <p><strong>原始响应：</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('分享物品出错:', error);
+                showError(resultDiv, `网络请求错误: ${error.message}`);
+            } finally {
+                // 恢复按钮状态
+                setButtonLoading('shareBtn', false);
+            }
+        });
+
+        // 物品领取表单提交
+        document.getElementById('claimForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('claimResult');
+
+            // 清空之前的结果
+            resultDiv.innerHTML = '';
+            resultDiv.className = 'result';
+
+            // 设置按钮加载状态
+            setButtonLoading('claimBtn', true);
+
+            try {
+                // 表单验证
+                const pickupCode = document.getElementById('pickupCode').value.trim();
+                const claimerId = document.getElementById('claimerId').value.trim();
+
+                if (!pickupCode) {
+                    showError(resultDiv, '取件码不能为空');
+                    return;
+                }
+
+                if (!claimerId) {
+                    showError(resultDiv, '领取者ID不能为空');
+                    return;
+                }
+
+                // 构建请求数据
+                const formData = {
+                    pickup_code: pickupCode,
+                    claimer_id: claimerId
+                };
+
+                console.log('领取物品请求数据:', formData);
+
+                // 发送请求 - 使用相对路径
+                const response = await fetch(`${API_BASE_URL}/items/claim`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                // 检查是否为JSON响应
+                const contentType = response.headers.get('content-type');
+                let data;
+
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`非JSON响应: ${text}`);
+                }
+
+                // 显示结果
+                if (response.ok || (data && data.code === 200)) {
+                    resultDiv.className = 'result success';
+
+                    // 如果有物品信息，格式化显示
+                    const itemInfo = data.item ? `
+                        <h4>物品信息：</h4>
+                        <ul>
+                            <li><strong>ID：</strong>${data.item.id || '未知'}</li>
+                            <li><strong>名称：</strong>${data.item.name || '未知'}</li>
+                            <li><strong>描述：</strong>${data.item.description || '无描述'}</li>
+                            <li><strong>类型ID：</strong>${data.item.type_id || '未知'}</li>
+                            <li><strong>数量：</strong>${data.item.num || 0}</li>
+                            <li><strong>耐久度：</strong>${data.item.durability || 0}</li>
+                            <li><strong>分享者ID：</strong>${data.item.sharer_id || '未知'}</li>
+                            <li><strong>取件码：</strong>${data.item.pickup_code || '未知'}</li>
+                            <li><strong>创建时间：</strong>${data.item.created_at || '未知'}</li>
+                            <li><strong>过期时间：</strong>${data.item.expires_at || '未知'}</li>
+                            <li><strong>已领取：</strong>${data.item.is_claimed ? '是' : '否'}</li>
+                            <li><strong>领取者ID：</strong>${data.item.claimer_id || '无'}</li>
+                        </ul>
+                    ` : '';
+
+                    resultDiv.innerHTML = `
+                        <h3>领取成功！</h3>
+                        <p><strong>消息：</strong>${data.message || '操作成功'}</p>
+                        ${itemInfo}
+                        <p><strong>原始响应：</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+                        <h3>领取失败</h3>
+                        <p><strong>状态码：</strong>${data.code || response.status}</p>
+                        <p><strong>错误信息：</strong>${data.message || data.error || '未知错误'}</p>
+                        <p><strong>原始响应：</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('领取物品出错:', error);
+                showError(resultDiv, `网络请求错误: ${error.message}`);
+            } finally {
+                // 恢复按钮状态
+                setButtonLoading('claimBtn', false);
+            }
+        });
+
+        // 健康检查按钮点击
+        document.getElementById('healthCheckBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('healthResult');
+
+            // 清空之前的结果
+            resultDiv.innerHTML = '';
+            resultDiv.className = 'result';
+
+            // 设置按钮加载状态
+            setButtonLoading('healthBtn', true);
+
+            try {
+                console.log('执行健康检查...');
+
+                // 发送请求 - 使用相对路径
+                const response = await fetch('/health', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                // 检查是否为JSON响应
+                const contentType = response.headers.get('content-type');
+                let data;
+
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`非JSON响应: ${text}`);
+                }
+
+                // 显示结果
+                if (response.ok && data.status === 'ok') {
+                    resultDiv.className = 'result success';
+
+                    // 格式化统计信息
+                    const statsHtml = data.statistics ? `
+                        <h4>服务器统计：</h4>
+                        <ul>
+                            <li><strong>总物品数：</strong>${data.statistics.total_items || 0}</li>
+                            <li><strong>最近1小时处理物品数：</strong>${data.statistics.hourly_processed_items || 0}</li>
+                    ` : '';
+
+                    // 格式化内存使用信息
+                    const memoryHtml = data.statistics?.memory_usage ? `
+                            <li><strong>内存使用：</strong>${data.statistics.memory_usage.current_mb || 0} MB (${data.statistics.memory_usage.percentage || '0%'})</li>
+                            <li><strong>最大允许内存：</strong>${data.statistics.memory_usage.max_allowed_mb || 0} MB</li>
+                        </ul>
+                    ` : '</ul>';
+
+                    resultDiv.innerHTML = `
+                        <h3>健康检查通过！</h3>
+                        <p><strong>状态：</strong>${data.status}</p>
+                        <p><strong>消息：</strong>${data.message || '服务正常运行中'}</p>
+                        <p><strong>时间戳：</strong>${data.timestamp || new Date().toISOString()}</p>
+                        ${statsHtml}${memoryHtml}
+                        <p><strong>原始响应：</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+                        <h3>健康检查失败</h3>
+                        <p><strong>状态：</strong>${data.status || 'unknown'}</p>
+                        <p><strong>状态码：</strong>${response.status}</p>
+                        <p><strong>消息：</strong>${data.message || '服务异常'}</p>
+                        <p><strong>原始响应：</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('健康检查出错:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>健康检查失败</h3>
+                    <p><strong>错误信息：</strong>${error.message}</p>
+                    <p>请确认服务器是否正在运行，并且可以访问。</p>
+                    <p>可能的原因：</p>
+                    <ul>
+                        <li>服务器未启动</li>
+                        <li>网络连接问题</li>
+                        <li>服务器配置错误</li>
+                    </ul>
+                `;
+            } finally {
+                // 恢复按钮状态
+                setButtonLoading('healthBtn', false);
+            }
+        });
+
+        // 复制到剪贴板功能
+        function copyToClipboard(text) {
+            if (!navigator.clipboard) {
+                // 降级方案
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                try {
+                    document.execCommand('copy');
+                    showNotification('复制成功！');
+                } catch (err) {
+                    console.error('复制失败:', err);
+                    alert('复制失败，请手动复制');
+                } finally {
+                    document.body.removeChild(textArea);
+                }
+                return;
+            }
+
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    showNotification('复制成功！');
+                })
+                .catch(err => {
+                    console.error('复制失败:', err);
+                    alert('复制失败，请手动复制');
+                });
+        }
+
+        // 从剪贴板粘贴功能
+        function pasteFromClipboard() {
+            if (!navigator.clipboard) {
+                alert('您的浏览器不支持此功能，请手动粘贴');
+                return;
+            }
+
+            navigator.clipboard.readText()
+                .then(text => {
+                    document.getElementById('pickupCode').value = text.trim();
+                    showNotification('已从剪贴板粘贴');
+                })
+                .catch(err => {
+                    console.error('粘贴失败:', err);
+                    alert('粘贴失败，请手动粘贴');
+                });
+        }
+
+        // 显示通知
+        function showNotification(message) {
+            // 创建临时通知元素
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background-color: var(--success-color);
+                color: white;
+                padding: 12px 20px;
+                border-radius: var(--border-radius);
+                box-shadow: var(--shadow);
+                z-index: 1000;
+                font-size: 14px;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            // 添加动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            // 2秒后移除通知
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                notification.style.transition = 'opacity 0.3s, transform 0.3s';
+
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                    document.head.removeChild(style);
+                }, 300);
+            }, 2000);
+        }
+
+        // 加载测试数据
+        function loadTestData() {
+            // 生成唯一ID，避免重复
+            const timestamp = Date.now();
+            const randomNum = Math.floor(Math.random() * 1000);
+
+            document.getElementById('name').value = '测试物品_' + randomNum;
+            document.getElementById('description').value = '这是一个用于API测试的物品，生成时间: ' + new Date().toLocaleString();
+            document.getElementById('typeId').value = Math.floor(Math.random() * 900) + 100; // 100-999的随机数
+            document.getElementById('num').value = 1;
+            document.getElementById('durability').value = (95 + Math.random() * 5).toFixed(1); // 95-100的随机数
+            document.getElementById('sharerId').value = 'test_sharer_' + timestamp;
+            document.getElementById('claimerId').value = 'test_claimer_' + timestamp;
+
+            // 清空结果区域
+            document.getElementById('shareResult').innerHTML = '';
+            document.getElementById('shareResult').className = 'result';
+            document.getElementById('claimResult').innerHTML = '';
+            document.getElementById('claimResult').className = 'result';
+
+            showNotification('测试数据已加载');
+        }
+
+        // 清空表单
+        function clearForms() {
+            // 清空分享表单
+            document.getElementById('shareForm').reset();
+
+            // 清空领取表单
+            document.getElementById('claimForm').reset();
+
+            // 清空结果区域
+            document.getElementById('shareResult').innerHTML = '';
+            document.getElementById('shareResult').className = 'result';
+            document.getElementById('claimResult').innerHTML = '';
+            document.getElementById('claimResult').className = 'result';
+            document.getElementById('healthResult').innerHTML = '';
+            document.getElementById('healthResult').className = 'result';
+
+            showNotification('表单已清空');
+        }
+
+        // 绑定按钮事件
+        document.getElementById('loadTestDataBtn').addEventListener('click', loadTestData);
+        document.getElementById('clearFormsBtn').addEventListener('click', clearForms);
+
+        // 页面加载时自动填充一些测试数据
+        window.addEventListener('load', () => {
+            console.log('DuckEx测试界面已加载');
+            // 自动加载测试数据
+            loadTestData();
+        });
+    </script>
+</body>
+
+</html>
