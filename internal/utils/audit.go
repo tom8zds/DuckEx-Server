@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -79,7 +80,7 @@ type AuditService interface {
 	GetCodeAttempts(pickupCode string) int
 	GetUserAttempts(userID string) int
 	GetAllLogs() []AuditRecord
-	GetLogsWithPagination(page, pageSize int) PaginatedLogs
+	GetLogsWithPagination(page, pageSize int, filters map[string]string) PaginatedLogs
 	SaveAuditLog() error
 }
 
@@ -317,8 +318,8 @@ func (s *InMemoryAuditService) GetAllLogs() []AuditRecord {
 	return logs
 }
 
-// GetLogsWithPagination 获取分页的审计日志
-func (s *InMemoryAuditService) GetLogsWithPagination(page, pageSize int) PaginatedLogs {
+// GetLogsWithPagination 获取分页的审计日志，支持过滤
+func (s *InMemoryAuditService) GetLogsWithPagination(page, pageSize int, filters map[string]string) PaginatedLogs {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	
@@ -332,21 +333,72 @@ func (s *InMemoryAuditService) GetLogsWithPagination(page, pageSize int) Paginat
 		pageSize = 100 // 限制最大每页100条
 	}
 	
-	// 复制所有记录以进行排序
+	// 复制所有记录以进行过滤和排序
 	allRecords := make([]AuditRecord, len(s.records))
 	copy(allRecords, s.records)
 	
+	// 应用过滤条件
+	var filteredRecords []AuditRecord
+	for _, record := range allRecords {
+		// 操作类型过滤
+		if action, ok := filters["action"]; ok && action != "" && record.Action != AuditAction(action) {
+			continue
+		}
+		
+		// 日志级别过滤
+		if level, ok := filters["level"]; ok && level != "" && record.Level != AuditLevel(level) {
+			continue
+		}
+		
+		// 用户ID过滤（模糊匹配）
+		if userID, ok := filters["user_id"]; ok && userID != "" {
+			if !strings.Contains(strings.ToLower(record.UserID), strings.ToLower(userID)) {
+				continue
+			}
+		}
+		
+		// 取件码过滤（模糊匹配）
+		if code, ok := filters["pickup_code"]; ok && code != "" {
+			if !strings.Contains(strings.ToUpper(record.PickupCode), strings.ToUpper(code)) {
+				continue
+			}
+		}
+		
+		// 时间范围过滤
+		if timeRange, ok := filters["time_range"]; ok && timeRange != "" && timeRange != "all" {
+			var cutoffTime time.Time
+			now := time.Now()
+			
+			switch timeRange {
+			case "1h":
+				cutoffTime = now.Add(-1 * time.Hour)
+			case "6h":
+				cutoffTime = now.Add(-6 * time.Hour)
+			case "24h":
+				cutoffTime = now.Add(-24 * time.Hour)
+			case "7d":
+				cutoffTime = now.Add(-7 * 24 * time.Hour)
+			}
+			
+			if !cutoffTime.IsZero() && record.Timestamp.Before(cutoffTime) {
+				continue
+			}
+		}
+		
+		filteredRecords = append(filteredRecords, record)
+	}
+	
 	// 按时间戳倒序排序（最新的在前）
-	for i := 0; i < len(allRecords)-1; i++ {
-		for j := 0; j < len(allRecords)-i-1; j++ {
-			if allRecords[j].Timestamp.Before(allRecords[j+1].Timestamp) {
-				allRecords[j], allRecords[j+1] = allRecords[j+1], allRecords[j]
+	for i := 0; i < len(filteredRecords)-1; i++ {
+		for j := 0; j < len(filteredRecords)-i-1; j++ {
+			if filteredRecords[j].Timestamp.Before(filteredRecords[j+1].Timestamp) {
+				filteredRecords[j], filteredRecords[j+1] = filteredRecords[j+1], filteredRecords[j]
 			}
 		}
 	}
 	
 	// 计算总页数
-	total := len(allRecords)
+	total := len(filteredRecords)
 	totalPages := (total + pageSize - 1) / pageSize
 	
 	// 计算偏移量
@@ -370,7 +422,7 @@ func (s *InMemoryAuditService) GetLogsWithPagination(page, pageSize int) Paginat
 	// 如果有数据，复制对应页的数据
 	if offset < total {
 		response.Logs = make([]AuditRecord, end-offset)
-		copy(response.Logs, allRecords[offset:end])
+		copy(response.Logs, filteredRecords[offset:end])
 	}
 	
 	return response

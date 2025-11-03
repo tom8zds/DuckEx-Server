@@ -18,7 +18,6 @@ func TestInMemoryItemRepository(t *testing.T) {
 	// 测试创建物品
 	pickupCode := utils.GeneratePickupCode()
 	item := &models.Item{
-		ID:             "test-item-1",
 		Name:           "Test Item",
 		Description:    "This is a test item",
 		TypeID:         123,
@@ -67,7 +66,6 @@ func TestInMemoryItemRepository(t *testing.T) {
 	// 创建一个过期物品
 	expiredPickupCode := utils.GeneratePickupCode()
 	expiredItem := &models.Item{
-		ID:             "test-item-expired",
 		Name:           "Expired Item",
 		Description:    "This item is expired",
 		TypeID:         456,
@@ -77,7 +75,7 @@ func TestInMemoryItemRepository(t *testing.T) {
 		SharerID:       "test-sharer",
 		PickupCode:     expiredPickupCode,
 		CreatedAt:      time.Now().Add(-48 * time.Hour),
-		ExpiresAt:      time.Now().Add(-24 * time.Hour), // 24小时前过期
+		ExpiresAt:      time.Now().Add(-8 * 24 * time.Hour), // 8天前过期（超过7天有效期）
 		IsClaimed:      false,
 	}
 	err = repo.Create(expiredItem)
@@ -116,7 +114,6 @@ func TestInMemoryItemRepositoryConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			pickupCode := utils.GeneratePickupCode()
 			item := &models.Item{
-				ID:             fmt.Sprintf("test-item-concurrent-%d", index),
 				Name:           fmt.Sprintf("Concurrent Item %d", index),
 				Description:    "Test concurrent access",
 				TypeID:         index + 1000,

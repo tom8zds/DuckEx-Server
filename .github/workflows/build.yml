@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, dev ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, dev ]
 
 jobs:
   build:
@@ -76,3 +76,23 @@ jobs:
         draft: false
         prerelease: false
         files: artifacts/*/*
+  
+  dev-artifacts:
+    needs: build
+    name: Upload Dev Artifacts
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        
+    - name: Upload dev branch artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: duckex-server-dev-${{ github.sha }}
+        path: artifacts/*/*
+        retention-days: 7

@@ -1,3 +1,3 @@
- $env:GOOS='windows'; go test -v ./...
- $env:GOOS='windows'; go build -o duckex-server.exe .\cmd\api\main.go
- $env:GOOS='linux'; go build -o duckex-server .\cmd\api\main.go
+ $env:GOOS='windows';  $env:CGO_ENABLED=1; go test -v ./...
+ $env:GOOS='windows'; $env:CGO_ENABLED=1; go build -o duckex-server.exe .\cmd\api\main.go
+ $env:GOOS='linux'; $env:CGO_ENABLED=0; go build -o duckex-server .\cmd\api\main.go

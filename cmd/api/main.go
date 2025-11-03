@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"duckex-server/internal/database"
 	"duckex-server/internal/handlers"
 	"duckex-server/internal/models"
 	"duckex-server/internal/utils"
@@ -65,8 +64,19 @@ func removePID(pidFile string) {
 }
 
 func main() {
-	// 初始化仓库
-	itemRepo := models.NewInMemoryItemRepository()
+	// 初始化SQLite数据库
+	dbPath := "./duckex.db"
+	if err := database.InitSQLite(dbPath); err != nil {
+		log.Fatalf("Failed to initialize SQLite database: %v", err)
+	}
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.Printf("Error closing database: %v", err)
+		}
+	}()
+
+	// 初始化仓库（使用SQLite实现）
+	itemRepo := models.NewSQLiteItemRepository()
 
 	// 保存PID文件
 	pidFile := defaultPIDFile
@@ -114,8 +124,8 @@ func main() {
 	log.Printf("Memory monitor initialized with max memory: %d MB", maxMemoryMB)
 	memoryMonitor := utils.NewMemoryMonitor(maxMemoryMB)
 
-	// 初始化审计服务
-	auditService := utils.NewAuditService("./audit_log.json")
+	// 初始化审计服务（使用SQLite实现）
+	auditService := utils.NewSQLiteAuditService()
 	log.Println("Audit service initialized with log file: ./audit_log.json")
 
 	// 初始化处理器
@@ -192,14 +202,22 @@ func main() {
 			c.JSON(http.StatusOK, memoryMonitor.GetStatus())
 		})
 
-		// 获取审计日志数据（支持分页）
+		// 获取审计日志数据（支持分页和过滤）
 		api.GET("/audit/logs", func(c *gin.Context) {
 			// 从请求参数获取分页信息
 			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 			pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-			// 调用分页查询方法
-			paginatedLogs := auditService.GetLogsWithPagination(page, pageSize)
+			// 从请求参数获取过滤信息
+			filters := make(map[string]string)
+			filters["action"] = c.Query("action")
+			filters["level"] = c.Query("level")
+			filters["user_id"] = c.Query("user_id")
+			filters["pickup_code"] = c.Query("pickup_code")
+			filters["time_range"] = c.Query("time_range")
+
+			// 调用分页查询方法（带过滤条件）
+			paginatedLogs := auditService.GetLogsWithPagination(page, pageSize, filters)
 
 			// 返回分页响应
 			c.JSON(http.StatusOK, gin.H{
@@ -214,78 +232,71 @@ func main() {
 
 		// 获取物品数量统计数据（用于折线图）
 		api.GET("/statistics/items", func(c *gin.Context) {
-			csvFile := "./item_statistics.csv"
-
-			// 检查文件是否存在
-			if _, err := os.Stat(csvFile); os.IsNotExist(err) {
-				c.JSON(http.StatusNotFound, gin.H{
-					"status":  "error",
-					"message": "Statistics file not found",
-				})
-				return
-			}
-
-			// 打开CSV文件
-			file, err := os.Open(csvFile)
+			// 从数据库获取统计数据
+			rows, err := database.DB.Query(
+				`SELECT timestamp, item_count, claimed_count, unclaimed_count 
+				 FROM item_statistics 
+				 ORDER BY timestamp DESC 
+				 LIMIT 100`,
+			)
 			if err != nil {
-				log.Printf("Error opening statistics file: %v", err)
+				log.Printf("Error querying statistics from database: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"status":  "error",
-					"message": "Failed to open statistics file",
+					"message": "Failed to query statistics data",
 				})
 				return
 			}
-			defer file.Close()
-
-			// 读取CSV数据
-			reader := csv.NewReader(file)
-
-			// 跳过表头
-			_, err = reader.Read()
-			if err != nil {
-				log.Printf("Error reading CSV header: %v", err)
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"status":  "error",
-					"message": "Failed to read statistics data",
-				})
-				return
-			}
+			defer rows.Close()
 
 			// 解析数据
 			var timestamps []string
 			var counts []int
+			var claimedCounts []int
+			var unclaimedCounts []int
 
-			for {
-				record, err := reader.Read()
-				if err == io.EOF {
-					break
-				}
+			// 读取所有行到临时切片，以便后续反转顺序
+			type statRecord struct {
+				timestamp    string
+				count        int
+				claimedCount int
+				unclaimedCount int
+			}
+			var records []statRecord
+
+			for rows.Next() {
+				var record statRecord
+				err := rows.Scan(&record.timestamp, &record.count, &record.claimedCount, &record.unclaimedCount)
 				if err != nil {
-					log.Printf("Error reading CSV record: %v", err)
+					log.Printf("Error scanning statistics record: %v", err)
 					continue
 				}
-
-				if len(record) >= 2 {
-					timestamps = append(timestamps, record[0])
-					count, err := strconv.Atoi(record[1])
-					if err != nil {
-						log.Printf("Error parsing count value: %v", err)
-						count = 0
-					}
-					counts = append(counts, count)
-				}
+				records = append(records, record)
 			}
 
-			// 只返回最后1000条数据
-			if len(timestamps) > 100 {
-				timestamps = timestamps[len(timestamps)-100:]
-				counts = counts[len(counts)-100:]
+			if err = rows.Err(); err != nil {
+				log.Printf("Error iterating statistics rows: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": "Failed to process statistics data",
+				})
+				return
+			}
+
+			// 反转记录顺序，使时间戳按升序排列
+			for i := len(records) - 1; i >= 0; i-- {
+				timestamps = append(timestamps, records[i].timestamp)
+				counts = append(counts, records[i].count)
+				claimedCounts = append(claimedCounts, records[i].claimedCount)
+				unclaimedCounts = append(unclaimedCounts, records[i].unclaimedCount)
 			}
 
 			c.JSON(http.StatusOK, gin.H{
-				"status":     "ok",
-				"timestamps": timestamps,
-				"counts":     counts,
+				"status":         "ok",
+				"timestamps":     timestamps,
+				"counts":         counts,
+				"claimed_counts": claimedCounts,
+				"unclaimed_counts": unclaimedCounts,
 			})
 		})
 	}
@@ -305,53 +316,34 @@ func main() {
 		}
 	}()
 
-	// 启动每5分钟统计物品数量并写入CSV的任务
+	// 启动每5分钟统计物品数量并写入数据库的任务
 	go func() {
-		csvFile := "./item_statistics.csv"
-		// 检查文件是否存在，如果不存在则创建并写入表头
-		if _, err := os.Stat(csvFile); os.IsNotExist(err) {
-			file, err := os.Create(csvFile)
-			if err != nil {
-				log.Printf("Error creating CSV file: %v", err)
-				return
-			}
-			// 写入CSV表头
-			_, err = file.WriteString("timestamp,item_count\n")
-			if err != nil {
-				log.Printf("Error writing CSV header: %v", err)
-			}
-			file.Close()
-			log.Printf("Created new statistics CSV file: %s", csvFile)
-		}
-
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
-		log.Printf("Started item statistics collection, will save to %s every 5 minutes", csvFile)
+		log.Printf("Started item statistics collection, will save to database every 5 minutes")
 
 		for {
 			select {
 			case <-ticker.C:
-				// 获取当前时间和物品总数
+				// 获取当前时间和物品统计信息
 				now := models.GetCurrentTime()
 				totalItemsCount := itemRepo.GetTotalCount()
+				claimedCount := itemRepo.GetClaimedCount()
+				unclaimedCount := totalItemsCount - claimedCount
 
-				// 打开文件以追加模式
-				file, err := os.OpenFile(csvFile, os.O_APPEND|os.O_WRONLY, 0644)
-				if err != nil {
-					log.Printf("Error opening CSV file for appending: %v", err)
-					continue
-				}
-
-				// 写入统计数据
-				csvLine := fmt.Sprintf("%s,%d\n", now.Format(time.RFC3339), totalItemsCount)
-				_, err = file.WriteString(csvLine)
-				file.Close()
+				// 保存统计数据到数据库
+				_, err := database.DB.Exec(
+					`INSERT INTO item_statistics (timestamp, item_count, claimed_count, unclaimed_count) 
+					 VALUES (?, ?, ?, ?)`,
+					now.Format(time.RFC3339), totalItemsCount, claimedCount, unclaimedCount,
+				)
 
 				if err != nil {
-					log.Printf("Error writing to CSV file: %v", err)
+					log.Printf("Error saving statistics to database: %v", err)
 				} else {
-					log.Printf("Saved item statistics to CSV: timestamp=%s, count=%d", now.Format(time.RFC3339), totalItemsCount)
+					log.Printf("Saved item statistics to database: timestamp=%s, total=%d, claimed=%d, unclaimed=%d", 
+						now.Format(time.RFC3339), totalItemsCount, claimedCount, unclaimedCount)
 				}
 			}
 		}

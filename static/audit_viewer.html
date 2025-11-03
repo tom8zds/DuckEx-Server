@@ -540,12 +540,23 @@
                 setInterval(loadAuditData, 30000);
             });
 
-            // 加载审计数据
+            // 加载审计数据（支持过滤）
             async function loadAuditData() {
                 showLoading();
                 try {
-                    // 从服务器获取分页的审计日志数据
-                    const url = `/api/v1/audit/logs?page=${currentPage}&page_size=${itemsPerPage}`;
+                    // 构建包含过滤参数的URL
+                    const params = new URLSearchParams();
+                    params.append('page', currentPage);
+                    params.append('page_size', itemsPerPage);
+                    
+                    // 添加过滤参数（从界面获取当前选择的值）
+                    params.append('action', document.getElementById('action-filter').value);
+                    params.append('level', document.getElementById('level-filter').value);
+                    params.append('user_id', document.getElementById('user-id-filter').value);
+                    params.append('pickup_code', document.getElementById('code-filter').value);
+                    params.append('time_range', document.getElementById('time-range').value);
+                    
+                    const url = `/api/v1/audit/logs?${params.toString()}`;
                     const response = await fetch(url);
                     if (!response.ok) {
                         throw new Error(`API请求失败: ${response.status}`);
@@ -562,7 +573,7 @@
                     }
 
                     updateStats();
-                    displayTable(); // 直接显示当前页数据，不再进行前端分页
+                    displayTable(); // 直接显示当前页数据
                     updatePagination();
                     updateLastUpdate();
                 } catch (error) {
@@ -579,55 +590,10 @@
 
             // 应用筛选条件
             function applyFilters() {
-                const actionFilter = document.getElementById("action-filter").value;
-                const levelFilter = document.getElementById("level-filter").value;
-                const userIdFilter = document.getElementById("user-id-filter").value.toLowerCase();
-                const codeFilter = document.getElementById("code-filter").value.toUpperCase();
-                const timeRange = document.getElementById("time-range").value;
-
-                filteredData = auditData.filter((record) => {
-                    // 操作类型筛选
-                    if (actionFilter && record.action !== actionFilter) return false;
-
-                    // 日志级别筛选
-                    if (levelFilter && record.level !== levelFilter) return false;
-
-                    // 用户ID筛选
-                    if (userIdFilter && !record.user_id.toLowerCase().includes(userIdFilter)) return false;
-
-                    // 取件码筛选
-                    if (codeFilter && (!record.pickup_code || !record.pickup_code.includes(codeFilter))) return false;
-
-                    // 时间范围筛选
-                    if (timeRange !== "all") {
-                        const recordTime = new Date(record.timestamp);
-                        const now = new Date();
-                        let cutoffTime = new Date();
-
-                        switch (timeRange) {
-                            case "1h":
-                                cutoffTime.setHours(now.getHours() - 1);
-                                break;
-                            case "6h":
-                                cutoffTime.setHours(now.getHours() - 6);
-                                break;
-                            case "24h":
-                                cutoffTime.setDate(now.getDate() - 1);
-                                break;
-                            case "7d":
-                                cutoffTime.setDate(now.getDate() - 7);
-                                break;
-                        }
-
-                        if (recordTime < cutoffTime) return false;
-                    }
-
-                    return true;
-                });
-
+                // 重置为第一页
                 currentPage = 1;
-                renderTable();
-                renderPagination();
+                // 直接调用loadAuditData，从后端获取过滤后的数据
+                loadAuditData();
             }
 
             // 重置筛选条件
@@ -812,15 +778,18 @@
                 // 从API响应获取总记录数
                 totalRecordsElement.textContent = totalRecords;
 
-                // 计算当前页的警告数量
+                // 对于警告和可疑记录数量，我们暂时基于当前页计算
+                // 因为后端API还没有直接返回这些统计信息
                 const warningCount = auditData.filter(
                     (record) => record.level === "warning" || record.level === "error" || record.level === "alert"
                 ).length;
                 warningCountElement.textContent = warningCount;
 
-                // 计算当前页的可疑记录数量
                 const suspiciousCount = auditData.filter((record) => record.is_suspicious).length;
                 suspiciousCountElement.textContent = suspiciousCount;
+                
+                // 注意：在生产环境中，可以考虑在后端API中添加获取完整统计信息的端点
+                // 或者在现有API中添加统计字段，以提供更准确的全局统计数据
             }
 
             // 更新最后更新时间

@@ -21,13 +21,13 @@ func init() {
 		return time.Now()
 	}
 	GetExpirationTime = func() time.Time {
-		return time.Now().Add(24 * time.Hour)
+		return time.Now().Add(7 * 24 * time.Hour) // 7天过期
 	}
 }
 
 // Item 物品模型
 type Item struct {
-	ID             string    `json:"id"`
+	ID             int       `json:"id"`
 	Name           string    `json:"name"`
 	Description    string    `json:"description"`
 	TypeID         int       `json:"type_id"`

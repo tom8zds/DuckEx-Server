@@ -1,29 +1,34 @@
 package utils
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"time"
 )
 
 const (
 	// 取件码长度
 	pickupCodeLength = 6
-	// 取件码有效期（24小时）
-	expirationDuration = 24 * time.Hour
+	// 取件码有效期（7天）
+	expirationDuration = 7 * 24 * time.Hour
 )
 
-// 初始化随机数种子
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
-// GeneratePickupCode 生成6位数的取件码
+// GeneratePickupCode 生成6位数的取件码，使用加密安全的随机数生成器
 func GeneratePickupCode() string {
 	const charset = "0123456789"
 	code := make([]byte, pickupCodeLength)
+	
+	// 使用crypto/rand代替math/rand，提供更好的随机性
 	for i := range code {
-		code[i] = charset[rand.Intn(len(charset))]
+		index, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// 如果加密随机数生成失败，使用回退方案
+			code[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		} else {
+			code[i] = charset[index.Int64()]
+		}
 	}
+	
 	return string(code)
 }
 

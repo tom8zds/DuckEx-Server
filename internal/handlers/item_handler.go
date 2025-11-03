@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"duckex-server/internal/models"
@@ -108,9 +110,8 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 	pickupCode := utils.GeneratePickupCode()
 	expiresAt := utils.GetExpirationTime()
 
-	// 创建物品
+	// 创建物品 - ID将由数据库自增生成
 	item := &models.Item{
-		ID:          models.GetCurrentTime().Format("20060102150405") + req.SharerID,
 		Name:        req.Name,
 		Description: req.Description,
 		TypeID:      req.TypeID,
@@ -130,8 +131,34 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 		item.DurabilityLoss = req.DurabilityLoss
 	}
 
-	// 保存物品
-	if err := h.itemRepo.Create(item); err != nil {
+	// 保存物品，添加取件码冲突检测和重试机制
+	maxRetries := 5
+	retryCount := 0
+	var err error
+	
+	for retryCount < maxRetries {
+		err = h.itemRepo.Create(item)
+		if err == nil {
+			// 创建成功，跳出循环
+			break
+		}
+		
+		// 检查是否为取件码冲突错误
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: items.pickup_code") {
+			retryCount++
+			// 生成新的取件码
+			pickupCode = utils.GeneratePickupCode()
+			item.PickupCode = pickupCode
+			// 短暂休眠避免立即重试导致的持续冲突
+			time.Sleep(10 * time.Millisecond)
+		} else {
+			// 其他类型的错误，不再重试
+			break
+		}
+	}
+	
+	// 检查最终结果
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: "Failed to share item: " + err.Error(),
 		})
@@ -151,7 +178,7 @@ func (h *ItemHandler) ShareItem(c *gin.Context) {
 
 	// 记录分享操作到审计日志
 	if h.auditService != nil {
-		h.auditService.LogShare(req.SharerID, pickupCode, item.ID, ipAddress, userAgent)
+		h.auditService.LogShare(req.SharerID, pickupCode, fmt.Sprintf("%d", item.ID), ipAddress, userAgent)
 	}
 
 	// 记录成功的API调用
@@ -258,7 +285,7 @@ func (h *ItemHandler) ClaimItem(c *gin.Context) {
 
 	// 记录成功领取到审计日志
 	if h.auditService != nil {
-		h.auditService.LogClaim(req.ClaimerID, req.PickupCode, item.ID, ipAddress, userAgent, true)
+		h.auditService.LogClaim(req.ClaimerID, req.PickupCode, fmt.Sprintf("%d", item.ID), ipAddress, userAgent, true)
 	}
 
 	// 记录成功的API调用
