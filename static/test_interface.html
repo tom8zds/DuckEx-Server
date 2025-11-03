@@ -182,7 +182,7 @@
             font-size: 14px;
             min-height: auto;
         }
-        
+
         /* 粘贴按钮样式 */
         .paste-button {
             background-color: var(--secondary-color, #6c757d);
@@ -190,17 +190,17 @@
             min-height: auto;
             width: 45px;
         }
-        
+
         .paste-button:hover {
             background-color: #424242;
         }
-        
+
         /* 输入组样式 */
         .input-group {
             display: flex;
             gap: 8px;
         }
-        
+
         /* 必填项标记 */
         .required {
             color: var(--danger-color);
@@ -279,33 +279,35 @@
             border-top-color: white;
             animation: spin 1s ease-in-out infinite;
         }
-        
+
         /* 加载动画 */
         .loading-spinner {
             display: none;
         }
-        
+
         .spinner {
             width: 20px;
             height: 20px;
             animation: spin 1s linear infinite;
         }
-        
+
         .spinner .path {
             stroke: white;
             stroke-linecap: round;
             animation: dash 1.5s ease-in-out infinite;
         }
-        
+
         @keyframes dash {
             0% {
                 stroke-dasharray: 1, 150;
                 stroke-dashoffset: 0;
             }
+
             50% {
                 stroke-dasharray: 90, 150;
                 stroke-dashoffset: -35;
             }
+
             100% {
                 stroke-dasharray: 90, 150;
                 stroke-dashoffset: -124;
@@ -398,8 +400,13 @@
 
             <div class="form-row">
                 <label for="durability">物品耐久度 <span class="required">*</span></label>
-                <input type="number" id="durability" name="durability" placeholder="输入物品耐久度" min="0" step="0.1"
-                    required>
+                <input type="number" id="durability" name="durability" placeholder="输入物品耐久度" min="0" step="0.1">
+            </div>
+
+            <div class="form-row">
+                <label for="durabilityLoss">物品耐久度损失 <span class="required">*</span></label>
+                <input type="number" id="durabilityLoss" name="durability_loss" placeholder="输入物品耐久度损失" min="0"
+                    step="0.1">
             </div>
 
             <div class="form-row">
@@ -520,6 +527,7 @@
                 const typeId = document.getElementById('typeId').value.trim();
                 const num = document.getElementById('num').value.trim();
                 const durability = document.getElementById('durability').value.trim();
+                const durabilityLoss = document.getElementById('durabilityLoss').value.trim();
                 const sharerId = document.getElementById('sharerId').value.trim();
 
                 if (!name) {
@@ -542,11 +550,6 @@
                     return;
                 }
 
-                if (!durability || isNaN(durability) || parseFloat(durability) < 0) {
-                    showError(resultDiv, '请输入有效的物品耐久度');
-                    return;
-                }
-
                 if (!sharerId) {
                     showError(resultDiv, '分享者ID不能为空');
                     return;
@@ -559,6 +562,7 @@
                     type_id: parseInt(typeId),
                     num: parseInt(num),
                     durability: parseFloat(durability),
+                    durability_loss: parseFloat(durabilityLoss),
                     sharer_id: sharerId
                 };
 
@@ -688,6 +692,7 @@
                             <li><strong>类型ID：</strong>${data.item.type_id || '未知'}</li>
                             <li><strong>数量：</strong>${data.item.num || 0}</li>
                             <li><strong>耐久度：</strong>${data.item.durability || 0}</li>
+                            <li><strong>耐久度损失：</strong>${data.item.durability_loss || 0}</li>
                             <li><strong>分享者ID：</strong>${data.item.sharer_id || '未知'}</li>
                             <li><strong>取件码：</strong>${data.item.pickup_code || '未知'}</li>
                             <li><strong>创建时间：</strong>${data.item.created_at || '未知'}</li>
