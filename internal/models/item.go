@@ -50,38 +50,51 @@ type ItemRepository interface {
 	Delete(pickupCode string) error
 	DeleteExpired() error
 	GetAll() []*Item
+	RecordAPICall(isSuccess bool, callType string)
+	GetProcessedCountInTimeRange(startTime, endTime time.Time) int
+}
+
+// APICallRecord API调用记录
+type APICallRecord struct {
+	Timestamp time.Time
+	IsSuccess bool
+	CallType  string // "share" 或 "claim"
 }
 
 // InMemoryItemRepository 内存实现的物品仓库
 type InMemoryItemRepository struct {
-	items       map[string]*Item
-	mutex       sync.RWMutex
-	storagePath string
-	fileMutex   sync.Mutex // 用于文件操作的互斥锁
-	ticker      *time.Ticker
-	stopChan    chan struct{}
+	items         map[string]*Item
+	mutex         sync.RWMutex
+	storagePath   string
+	fileMutex     sync.Mutex // 用于文件操作的互斥锁
+	ticker        *time.Ticker
+	stopChan      chan struct{}
+	apiCalls      []APICallRecord // 记录API调用历史
+	apiCallsMutex sync.RWMutex    // 用于API调用记录的互斥锁
 }
 
 // NewInMemoryItemRepository 创建新的内存仓库实例
 func NewInMemoryItemRepository() *InMemoryItemRepository {
 	// 默认存储路径
 	storagePath := "./items_backup.json"
-	
+
 	// 创建仓库实例
 	repo := &InMemoryItemRepository{
-		items:       make(map[string]*Item),
-		storagePath: storagePath,
-		fileMutex:   sync.Mutex{},
-		ticker:      time.NewTicker(5 * time.Minute),
-		stopChan:    make(chan struct{}),
+		items:         make(map[string]*Item),
+		storagePath:   storagePath,
+		fileMutex:     sync.Mutex{},
+		ticker:        time.NewTicker(5 * time.Minute),
+		stopChan:      make(chan struct{}),
+		apiCalls:      make([]APICallRecord, 0),
+		apiCallsMutex: sync.RWMutex{},
 	}
-	
+
 	// 从文件加载未领取的物品
 	repo.LoadFromFile()
-	
+
 	// 启动定时保存任务
 	repo.startPeriodicSave()
-	
+
 	return repo
 }
 
@@ -101,7 +114,7 @@ func (r *InMemoryItemRepository) GetByPickupCode(pickupCode string) (*Item, erro
 		r.mutex.RUnlock()
 		return nil, nil
 	}
-	
+
 	// 检查物品是否过期
 	if GetCurrentTime().After(item.ExpiresAt) {
 		// 解锁读锁，获取写锁删除过期物品
@@ -114,7 +127,7 @@ func (r *InMemoryItemRepository) GetByPickupCode(pickupCode string) (*Item, erro
 		r.mutex.Unlock()
 		return nil, nil
 	}
-	
+
 	r.mutex.RUnlock()
 	return item, nil
 }
@@ -160,10 +173,10 @@ func (r *InMemoryItemRepository) startPeriodicSave() {
 // Shutdown 优雅关闭，保存数据
 func (r *InMemoryItemRepository) Shutdown() error {
 	log.Println("Shutting down item repository, saving data...")
-	
+
 	// 停止定时保存任务
 	close(r.stopChan)
-	
+
 	// 保存当前数据
 	return r.SaveToFile()
 }
@@ -197,16 +210,41 @@ func (r *InMemoryItemRepository) GetTotalCount() int {
 	return len(r.items)
 }
 
-// GetProcessedCountInTimeRange 获取指定时间范围内处理的物品数量（分享和领取）
+// RecordAPICall 记录API调用
+func (r *InMemoryItemRepository) RecordAPICall(isSuccess bool, callType string) {
+	r.apiCallsMutex.Lock()
+	defer r.apiCallsMutex.Unlock()
+
+	// 记录API调用
+	record := APICallRecord{
+		Timestamp: GetCurrentTime(),
+		IsSuccess: isSuccess,
+		CallType:  callType,
+	}
+	r.apiCalls = append(r.apiCalls, record)
+
+	// 限制记录数量，只保留最近7天的数据
+	sevenDaysAgo := GetCurrentTime().AddDate(0, 0, -7)
+	var validRecords []APICallRecord
+	for _, call := range r.apiCalls {
+		if call.Timestamp.After(sevenDaysAgo) {
+			validRecords = append(validRecords, call)
+		}
+	}
+	r.apiCalls = validRecords
+}
+
+// GetProcessedCountInTimeRange 获取指定时间范围内成功处理的API调用次数
 func (r *InMemoryItemRepository) GetProcessedCountInTimeRange(startTime, endTime time.Time) int {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+	r.apiCallsMutex.RLock()
+	defer r.apiCallsMutex.RUnlock()
+
 	processedCount := 0
-	for _, item := range r.items {
-		// 统计创建时间在指定范围内的物品（分享）
-		// 注意：对于已领取的物品，我们也计入统计
-		if (item.CreatedAt.After(startTime) || item.CreatedAt.Equal(startTime)) &&
-		   (item.CreatedAt.Before(endTime) || item.CreatedAt.Equal(endTime)) {
+	for _, call := range r.apiCalls {
+		// 只统计成功的调用，并且时间在指定范围内
+		if call.IsSuccess &&
+			(call.Timestamp.After(startTime) || call.Timestamp.Equal(startTime)) &&
+			(call.Timestamp.Before(endTime) || call.Timestamp.Equal(endTime)) {
 			processedCount++
 		}
 	}
@@ -220,38 +258,38 @@ func (r *InMemoryItemRepository) LoadFromFile() error {
 		log.Printf("No existing backup file found at %s", r.storagePath)
 		return nil
 	}
-	
+
 	// 使用文件锁确保线程安全地读取文件
 	r.fileMutex.Lock()
-	
+
 	// 读取文件内容
 	data, err := ioutil.ReadFile(r.storagePath)
-	
+
 	// 先释放文件锁，因为后续操作不再需要访问文件
 	r.fileMutex.Unlock()
-	
+
 	if err != nil {
 		log.Printf("Error reading backup file: %v", err)
 		return err
 	}
-	
+
 	// 检查数据是否为空
 	if len(data) == 0 {
 		log.Printf("Backup file is empty, skipping load")
 		return nil
 	}
-	
+
 	// 解析JSON数据
 	var items []*Item
 	if err := json.Unmarshal(data, &items); err != nil {
 		log.Printf("Error unmarshaling backup data: %v", err)
 		return err
 	}
-	
+
 	// 加锁并加载物品到内存
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	
+
 	// 过滤出未过期的物品并加载到内存
 	successfullyLoaded := 0
 	for _, item := range items {
@@ -261,7 +299,7 @@ func (r *InMemoryItemRepository) LoadFromFile() error {
 			successfullyLoaded++
 		}
 	}
-	
+
 	log.Printf("Successfully loaded %d unclaimed items from backup", successfullyLoaded)
 	return nil
 }
@@ -277,24 +315,24 @@ func (r *InMemoryItemRepository) SaveToFile() error {
 		}
 	}
 	r.mutex.RUnlock()
-	
+
 	// 将物品序列化为JSON
 	data, err := json.MarshalIndent(itemsToSave, "", "  ")
 	if err != nil {
 		log.Printf("Error marshaling items to JSON: %v", err)
 		return err
 	}
-	
+
 	// 使用文件锁确保线程安全地写入文件
 	r.fileMutex.Lock()
 	defer r.fileMutex.Unlock()
-	
+
 	// 写入文件
 	if err := ioutil.WriteFile(r.storagePath, data, 0644); err != nil {
 		log.Printf("Error writing to backup file: %v", err)
 		return err
 	}
-	
+
 	log.Printf("Successfully saved %d unclaimed items to backup", len(itemsToSave))
 	return nil
 }

@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>审计日志查看器 - DuckEx</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial,
+                    sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background-color: #f5f5f5;
+            }
+
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+
+            header {
+                background-color: #1a73e8;
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 30px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            h1 {
+                font-size: 28px;
+                margin-bottom: 10px;
+            }
+
+            .subtitle {
+                font-size: 16px;
+                opacity: 0.9;
+            }
+
+            .controls {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+
+            .filters {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+
+            .filter-group {
+                display: flex;
+                flex-direction: column;
+                min-width: 150px;
+            }
+
+            .filter-group label {
+                font-weight: 500;
+                margin-bottom: 5px;
+                color: #5f6368;
+            }
+
+            .filter-group select,
+            .filter-group input {
+                padding: 8px 12px;
+                border: 1px solid #dadce0;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+
+            .filter-group select:focus,
+            .filter-group input:focus {
+                outline: none;
+                border-color: #1a73e8;
+                box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+            }
+
+            .actions {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+
+            button {
+                padding: 8px 16px;
+                background-color: #1a73e8;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+
+            button:hover {
+                background-color: #1557b0;
+            }
+
+            button.secondary {
+                background-color: #e8eaed;
+                color: #333;
+            }
+
+            button.secondary:hover {
+                background-color: #dadce0;
+            }
+
+            .stats-cards {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+
+            .stat-card {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                border-left: 4px solid #1a73e8;
+            }
+
+            .stat-card.warning {
+                border-left-color: #ea4335;
+            }
+
+            .stat-card.info {
+                border-left-color: #34a853;
+            }
+
+            .stat-card.suspicious {
+                border-left-color: #fbbc04;
+            }
+
+            .stat-value {
+                font-size: 32px;
+                font-weight: bold;
+                color: #1a73e8;
+                margin-bottom: 5px;
+            }
+
+            .stat-card.warning .stat-value {
+                color: #ea4335;
+            }
+
+            .stat-card.info .stat-value {
+                color: #34a853;
+            }
+
+            .stat-card.suspicious .stat-value {
+                color: #fbbc04;
+            }
+
+            .stat-label {
+                font-size: 14px;
+                color: #5f6368;
+            }
+
+            .audit-table {
+                background-color: white;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            th {
+                background-color: #f8f9fa;
+                padding: 12px 16px;
+                text-align: left;
+                font-weight: 600;
+                color: #5f6368;
+                font-size: 14px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            td {
+                padding: 12px 16px;
+                font-size: 14px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+
+            tr:last-child td {
+                border-bottom: none;
+            }
+
+            tr:hover {
+                background-color: #f8f9fa;
+            }
+
+            .level-info {
+                color: #1a73e8;
+            }
+
+            .level-warning {
+                color: #fbbc04;
+            }
+
+            .level-error {
+                color: #ea4335;
+            }
+
+            .level-alert {
+                color: #ea4335;
+                font-weight: bold;
+            }
+
+            .suspicious {
+                background-color: #fff3cd;
+            }
+
+            .suspicious:hover {
+                background-color: #ffeaa7;
+            }
+
+            .pagination {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin-top: 20px;
+                gap: 5px;
+            }
+
+            .pagination button {
+                min-width: 32px;
+                height: 32px;
+                padding: 0 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .pagination button.active {
+                background-color: #1a73e8;
+                font-weight: bold;
+            }
+
+            .loading {
+                display: none;
+                text-align: center;
+                padding: 40px;
+                color: #1a73e8;
+            }
+
+            .no-data {
+                text-align: center;
+                padding: 60px;
+                color: #5f6368;
+                font-size: 16px;
+            }
+
+            .timestamp {
+                font-family: monospace;
+                color: #5f6368;
+            }
+
+            .details-btn {
+                background: none;
+                color: #1a73e8;
+                padding: 4px 8px;
+                font-size: 12px;
+                cursor: pointer;
+            }
+
+            .details-btn:hover {
+                background-color: rgba(26, 115, 232, 0.1);
+            }
+
+            /* Modal styles */
+            .modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .modal-content {
+                background-color: white;
+                padding: 30px;
+                border-radius: 8px;
+                max-width: 600px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            }
+
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                padding-bottom: 15px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            .modal-title {
+                font-size: 20px;
+                font-weight: 600;
+                color: #333;
+            }
+
+            .close-modal {
+                background: none;
+                border: none;
+                font-size: 24px;
+                color: #5f6368;
+                cursor: pointer;
+                padding: 0;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .close-modal:hover {
+                background-color: #f0f0f0;
+                border-radius: 50%;
+            }
+
+            .detail-item {
+                display: flex;
+                margin-bottom: 12px;
+            }
+
+            .detail-label {
+                font-weight: 600;
+                color: #5f6368;
+                min-width: 120px;
+            }
+
+            .detail-value {
+                color: #333;
+                word-break: break-all;
+            }
+
+            @media (max-width: 768px) {
+                .filters {
+                    flex-direction: column;
+                }
+
+                .filter-group {
+                    min-width: 100%;
+                }
+
+                .stats-cards {
+                    grid-template-columns: 1fr;
+                }
+
+                table {
+                    display: block;
+                    overflow-x: auto;
+                }
+
+                .modal-content {
+                    width: 95%;
+                    margin: 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>审计日志查看器</h1>
+                <div class="subtitle">实时监控和分析用户行为，识别潜在的可疑活动</div>
+            </header>
+
+            <div class="stats-cards">
+                <div class="stat-card info">
+                    <div class="stat-value" id="total-records">0</div>
+                    <div class="stat-label">总记录数</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-value" id="warning-count">0</div>
+                    <div class="stat-label">警告记录</div>
+                </div>
+                <div class="stat-card suspicious">
+                    <div class="stat-value" id="suspicious-count">0</div>
+                    <div class="stat-label">可疑活动</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="last-update">--</div>
+                    <div class="stat-label">最后更新</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="action-filter">操作类型</label>
+                        <select id="action-filter">
+                            <option value="">全部</option>
+                            <option value="share">分享物品</option>
+                            <option value="claim">领取物品</option>
+                            <option value="invalid_code">无效取件码</option>
+                            <option value="duplicate_code">重复使用</option>
+                            <option value="expired_code">过期取件码</option>
+                            <option value="error">错误</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="level-filter">日志级别</label>
+                        <select id="level-filter">
+                            <option value="">全部</option>
+                            <option value="info">信息</option>
+                            <option value="warning">警告</option>
+                            <option value="error">错误</option>
+                            <option value="alert">告警</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="user-id-filter">用户ID</label>
+                        <input type="text" id="user-id-filter" placeholder="输入用户ID" />
+                    </div>
+                    <div class="filter-group">
+                        <label for="code-filter">取件码</label>
+                        <input type="text" id="code-filter" placeholder="输入取件码" />
+                    </div>
+                    <div class="filter-group">
+                        <label for="time-range">时间范围</label>
+                        <select id="time-range">
+                            <option value="1h">最近1小时</option>
+                            <option value="6h">最近6小时</option>
+                            <option value="24h" selected>最近24小时</option>
+                            <option value="7d">最近7天</option>
+                            <option value="all">全部</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button id="apply-filters">应用筛选</button>
+                    <button id="reset-filters" class="secondary">重置筛选</button>
+                    <button id="refresh-data" class="secondary">刷新数据</button>
+                    <button id="export-data" class="secondary">导出数据</button>
+                </div>
+            </div>
+
+            <div class="loading" id="loading">
+                <p>正在加载审计数据...</p>
+            </div>
+
+            <div class="audit-table">
+                <table id="audit-table">
+                    <thead>
+                        <tr>
+                            <th>时间戳</th>
+                            <th>操作类型</th>
+                            <th>级别</th>
+                            <th>用户ID</th>
+                            <th>取件码</th>
+                            <th>信息</th>
+                            <th>是否可疑</th>
+                            <th>审计原因</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-table-body">
+                        <tr class="no-data">
+                            <td colspan="8">暂无数据</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination" id="pagination">
+                <!-- 分页按钮将通过JavaScript动态生成 -->
+            </div>
+        </div>
+
+        <!-- 详情模态框 -->
+        <div class="modal" id="detail-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title">审计记录详情</h2>
+                    <button class="close-modal" id="close-modal">&times;</button>
+                </div>
+                <div id="detail-content">
+                    <!-- 详情内容将通过JavaScript动态生成 -->
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // 全局变量
+            let auditData = [];
+            let filteredData = [];
+            let currentPage = 1;
+            const itemsPerPage = 20;
+            let totalRecords = 0;
+            let totalPages = 1;
+
+            // DOM元素
+            const loadingElement = document.getElementById("loading");
+            const tableBody = document.getElementById("audit-table-body");
+            const pagination = document.getElementById("pagination");
+            const totalRecordsElement = document.getElementById("total-records");
+            const warningCountElement = document.getElementById("warning-count");
+            const suspiciousCountElement = document.getElementById("suspicious-count");
+            const lastUpdateElement = document.getElementById("last-update");
+            const detailModal = document.getElementById("detail-modal");
+            const detailContent = document.getElementById("detail-content");
+
+            // 事件监听器
+            document.getElementById("apply-filters").addEventListener("click", applyFilters);
+            document.getElementById("reset-filters").addEventListener("click", resetFilters);
+            document.getElementById("refresh-data").addEventListener("click", loadAuditData);
+            document.getElementById("export-data").addEventListener("click", exportData);
+            document.getElementById("close-modal").addEventListener("click", closeModal);
+            detailModal.addEventListener("click", (e) => {
+                if (e.target === detailModal) closeModal();
+            });
+
+            // 初始化
+            window.addEventListener("DOMContentLoaded", () => {
+                loadAuditData();
+                // 设置自动刷新（每30秒）
+                setInterval(loadAuditData, 30000);
+            });
+
+            // 加载审计数据
+            async function loadAuditData() {
+                showLoading();
+                try {
+                    // 从服务器获取分页的审计日志数据
+                    const url = `/api/v1/audit/logs?page=${currentPage}&page_size=${itemsPerPage}`;
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`API请求失败: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    if (data.status === 'success') {
+                        auditData = data.logs || [];
+                        totalRecords = data.total || 0;
+                        totalPages = data.total_pages || 1;
+                        currentPage = data.page || 1;
+                    } else {
+                        throw new Error('获取审计日志失败');
+                    }
+
+                    updateStats();
+                    displayTable(); // 直接显示当前页数据，不再进行前端分页
+                    updatePagination();
+                    updateLastUpdate();
+                } catch (error) {
+                    console.error("Failed to load audit data:", error);
+                    showError("加载审计数据失败，请稍后重试");
+                } finally {
+                    hideLoading();
+                }
+            }
+
+
+
+
+
+            // 应用筛选条件
+            function applyFilters() {
+                const actionFilter = document.getElementById("action-filter").value;
+                const levelFilter = document.getElementById("level-filter").value;
+                const userIdFilter = document.getElementById("user-id-filter").value.toLowerCase();
+                const codeFilter = document.getElementById("code-filter").value.toUpperCase();
+                const timeRange = document.getElementById("time-range").value;
+
+                filteredData = auditData.filter((record) => {
+                    // 操作类型筛选
+                    if (actionFilter && record.action !== actionFilter) return false;
+
+                    // 日志级别筛选
+                    if (levelFilter && record.level !== levelFilter) return false;
+
+                    // 用户ID筛选
+                    if (userIdFilter && !record.user_id.toLowerCase().includes(userIdFilter)) return false;
+
+                    // 取件码筛选
+                    if (codeFilter && (!record.pickup_code || !record.pickup_code.includes(codeFilter))) return false;
+
+                    // 时间范围筛选
+                    if (timeRange !== "all") {
+                        const recordTime = new Date(record.timestamp);
+                        const now = new Date();
+                        let cutoffTime = new Date();
+
+                        switch (timeRange) {
+                            case "1h":
+                                cutoffTime.setHours(now.getHours() - 1);
+                                break;
+                            case "6h":
+                                cutoffTime.setHours(now.getHours() - 6);
+                                break;
+                            case "24h":
+                                cutoffTime.setDate(now.getDate() - 1);
+                                break;
+                            case "7d":
+                                cutoffTime.setDate(now.getDate() - 7);
+                                break;
+                        }
+
+                        if (recordTime < cutoffTime) return false;
+                    }
+
+                    return true;
+                });
+
+                currentPage = 1;
+                renderTable();
+                renderPagination();
+            }
+
+            // 重置筛选条件
+            function resetFilters() {
+                document.getElementById("action-filter").value = "";
+                document.getElementById("level-filter").value = "";
+                document.getElementById("user-id-filter").value = "";
+                document.getElementById("code-filter").value = "";
+                document.getElementById("time-range").value = "24h";
+
+                applyFilters();
+            }
+
+            // 渲染表格（直接显示当前页数据）
+            function displayTable() {
+                tableBody.innerHTML = "";
+
+                if (auditData.length === 0) {
+                    const noDataRow = document.createElement("tr");
+                    noDataRow.className = "no-data";
+                    noDataRow.innerHTML = '<td colspan="8">当前页没有数据</td>';
+                    tableBody.appendChild(noDataRow);
+                    return;
+                }
+
+                // 直接渲染当前页的数据（由后端提供）
+                auditData.forEach((record) => {
+                    const row = document.createElement("tr");
+                    if (record.is_suspicious) {
+                        row.className = "suspicious";
+                    }
+
+                    // 格式化时间戳
+                    const formattedTime = new Date(record.timestamp).toLocaleString("zh-CN", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: false,
+                    });
+
+                    // 获取操作类型的中文名称
+                    const actionName = getActionName(record.action);
+
+                    // 获取级别的样式类和中文名称
+                    const levelClass = `level-${record.level}`;
+                    const levelName = getLevelName(record.level);
+
+                    // 获取审计原因（如果有的话）
+                    const suspiciousReason = record.suspicious_reason || "-";
+                    
+                    // 将英文消息转换为中文
+                    const translatedMessage = translateMessage(record.message);
+                    
+                    row.innerHTML = `
+                    <td class="timestamp">${formattedTime}</td>
+                    <td>${actionName}</td>
+                    <td class="${levelClass}">${levelName}</td>
+                    <td>${record.user_id}</td>
+                    <td>${record.pickup_code || "-"}</td>
+                    <td>${translatedMessage}</td>
+                    <td>${record.is_suspicious ? "是" : "否"}</td>
+                    <td>${record.is_suspicious ? suspiciousReason : "-"}</td>
+                    <td><button class="details-btn" onclick="showRecordDetails(${JSON.stringify(record).replace(
+                        /"/g,
+                        '\\'
+                    )})">查看详情</button></td>
+                `;
+
+                    tableBody.appendChild(row);
+                });
+            }
+
+            // 更新分页信息和总数显示
+            function updatePagination() {
+                // 更新总数显示
+                totalRecordsElement.textContent = totalRecords;
+                
+                // 调用渲染分页控件
+                renderPagination();
+            }
+            
+            // 渲染分页控件
+            function renderPagination() {
+                pagination.innerHTML = "";
+
+                // 只有一页时不显示分页
+                if (totalPages <= 1) return;
+
+                // 上一页按钮
+                const prevButton = document.createElement("button");
+                prevButton.textContent = "上一页";
+                prevButton.disabled = currentPage === 1;
+                prevButton.addEventListener("click", () => {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        loadAuditData(); // 重新从服务器加载数据
+                    }
+                });
+                pagination.appendChild(prevButton);
+
+                // 页码按钮
+                // 只显示当前页附近的几个页码
+                const startPage = Math.max(1, currentPage - 2);
+                const endPage = Math.min(totalPages, startPage + 4);
+
+                if (startPage > 1) {
+                    const pageButton = document.createElement("button");
+                    pageButton.textContent = "1";
+                    pageButton.className = currentPage === 1 ? "active" : "";
+                    pageButton.addEventListener("click", () => {
+                        currentPage = 1;
+                        loadAuditData(); // 重新从服务器加载数据
+                    });
+                    pagination.appendChild(pageButton);
+                    
+                    if (startPage > 2) {
+                        const ellipsis = document.createElement("span");
+                        ellipsis.textContent = "...";
+                        pagination.appendChild(ellipsis);
+                    }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    const pageButton = document.createElement("button");
+                    pageButton.textContent = i;
+                    pageButton.className = currentPage === i ? "active" : "";
+                    pageButton.addEventListener("click", () => {
+                        currentPage = i;
+                        loadAuditData(); // 重新从服务器加载数据
+                    });
+                    pagination.appendChild(pageButton);
+                }
+
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        const ellipsis = document.createElement("span");
+                        ellipsis.textContent = "...";
+                        pagination.appendChild(ellipsis);
+                    }
+                    
+                    const pageButton = document.createElement("button");
+                    pageButton.textContent = totalPages;
+                    pageButton.className = currentPage === totalPages ? "active" : "";
+                    pageButton.addEventListener("click", () => {
+                        currentPage = totalPages;
+                        loadAuditData(); // 重新从服务器加载数据
+                    });
+                    pagination.appendChild(pageButton);
+                }
+
+                // 下一页按钮
+                const nextButton = document.createElement("button");
+                nextButton.textContent = "下一页";
+                nextButton.disabled = currentPage === totalPages;
+                nextButton.addEventListener("click", () => {
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        loadAuditData(); // 重新从服务器加载数据
+                    }
+                });
+                pagination.appendChild(nextButton);
+            }
+
+            // 将英文消息转换为中文
+            function translateMessage(message) {
+                const translations = {
+                    "Item shared successfully": "物品分享成功",
+                    "Item claimed successfully": "物品领取成功",
+                    "Item claim attempt failed": "物品领取失败",
+                    "Attempt to use non-existent pickup code": "尝试使用不存在的取件码"
+                };
+                
+                // 如果有对应的中文翻译则返回翻译，否则返回原文
+                return translations[message] || message;
+            }
+            
+            // 更新统计信息
+            function updateStats() {
+                // 从API响应获取总记录数
+                totalRecordsElement.textContent = totalRecords;
+
+                // 计算当前页的警告数量
+                const warningCount = auditData.filter(
+                    (record) => record.level === "warning" || record.level === "error" || record.level === "alert"
+                ).length;
+                warningCountElement.textContent = warningCount;
+
+                // 计算当前页的可疑记录数量
+                const suspiciousCount = auditData.filter((record) => record.is_suspicious).length;
+                suspiciousCountElement.textContent = suspiciousCount;
+            }
+
+            // 更新最后更新时间
+            function updateLastUpdate() {
+                const now = new Date();
+                lastUpdateElement.textContent = now.toLocaleString("zh-CN", {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                });
+            }
+
+            // 显示记录详情
+            window.showRecordDetails = function (record) {
+                detailContent.innerHTML = `
+                <div class="detail-item">
+                    <div class="detail-label">时间戳：</div>
+                    <div class="detail-value">${new Date(record.timestamp).toLocaleString("zh-CN")}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">操作类型：</div>
+                    <div class="detail-value">${getActionName(record.action)}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">日志级别：</div>
+                    <div class="detail-value">${getLevelName(record.level)}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">用户ID：</div>
+                    <div class="detail-value">${record.user_id}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">取件码：</div>
+                    <div class="detail-value">${record.pickup_code || "-"}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">物品ID：</div>
+                    <div class="detail-value">${record.item_id || "-"}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">消息：</div>
+                    <div class="detail-value">${record.message}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">IP地址：</div>
+                    <div class="detail-value">${record.ip_address}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">用户代理：</div>
+                    <div class="detail-value">${record.user_agent}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">状态码：</div>
+                    <div class="detail-value">${record.status_code}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">可疑活动：</div>
+                    <div class="detail-value">${record.is_suspicious ? "是" : "否"}</div>
+                </div>
+            `;
+
+                detailModal.style.display = "flex";
+            };
+
+            // 关闭模态框
+            function closeModal() {
+                detailModal.style.display = "none";
+            }
+
+            // 导出数据
+            function exportData() {
+                if (filteredData.length === 0) {
+                    alert("没有数据可导出");
+                    return;
+                }
+
+                // 转换为CSV格式
+                const headers = [
+                    "时间戳",
+                    "操作类型",
+                    "日志级别",
+                    "用户ID",
+                    "取件码",
+                    "物品ID",
+                    "消息",
+                    "IP地址",
+                    "可疑活动",
+                ];
+                const rows = filteredData.map((record) => [
+                    new Date(record.timestamp).toLocaleString("zh-CN"),
+                    getActionName(record.action),
+                    getLevelName(record.level),
+                    record.user_id,
+                    record.pickup_code || "",
+                    record.item_id || "",
+                    record.message,
+                    record.ip_address,
+                    record.is_suspicious ? "是" : "否",
+                ]);
+
+                // 创建CSV内容
+                let csvContent = headers.join(",") + "\n";
+                rows.forEach((row) => {
+                    csvContent += row.map((cell) => `"${cell}"`).join(",") + "\n";
+                });
+
+                // 创建下载链接
+                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `audit_log_${new Date().toISOString().slice(0, 10)}.csv`);
+                link.style.visibility = "hidden";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            // 获取操作类型的中文名称
+            function getActionName(action) {
+                const actionNames = {
+                    share: "分享物品",
+                    claim: "领取物品",
+                    invalid_code: "无效取件码",
+                    duplicate_code: "重复使用",
+                    expired_code: "过期取件码",
+                    error: "错误",
+                };
+                return actionNames[action] || action;
+            }
+
+            // 获取级别的中文名称
+            function getLevelName(level) {
+                const levelNames = {
+                    info: "信息",
+                    warning: "警告",
+                    error: "错误",
+                    alert: "告警",
+                };
+                return levelNames[level] || level;
+            }
+
+            // 显示加载状态
+            function showLoading() {
+                loadingElement.style.display = "block";
+            }
+
+            // 隐藏加载状态
+            function hideLoading() {
+                loadingElement.style.display = "none";
+            }
+
+            // 显示错误信息
+            function showError(message) {
+                alert(message);
+            }
+        </script>
+    </body>
+</html>

@@ -25,7 +25,9 @@ func setupTestRouter() (*gin.Engine, models.ItemRepository) {
 	// 创建仓库和处理器
 	itemRepo := models.NewInMemoryItemRepository()
 	monitor := utils.NewMemoryMonitor(500)
-	itemHandler := handlers.NewItemHandler(itemRepo, monitor)
+	auditService := utils.NewAuditService("")
+
+	itemHandler := handlers.NewItemHandler(itemRepo, monitor, auditService)
 
 	// 创建路由
 	r := gin.Default()

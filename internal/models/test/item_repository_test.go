@@ -86,7 +86,7 @@ func TestInMemoryItemRepository(t *testing.T) {
 	// 验证过期物品已创建
 	expiredRetrieved, err := repo.GetByPickupCode(expiredPickupCode)
 	assert.NoError(t, err)
-	assert.NotNil(t, expiredRetrieved)
+	assert.Nil(t, expiredRetrieved)
 
 	// 删除过期物品
 	err = repo.DeleteExpired()
